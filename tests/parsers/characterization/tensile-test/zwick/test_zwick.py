@@ -63,8 +63,8 @@ class TestTimeseries:
         assert expected.issubset(set(result.timeseries.columns))
 
     def test_row_count(self, result):
-        # Sample file has 21 data rows (0.0 s to 2.0 s in steps of 0.1)
-        assert len(result.timeseries) == 21
+        # Sample file has 82 data rows (realistic DX56 tensile curve)
+        assert len(result.timeseries) == 82
 
     def test_first_row_values_are_zero(self, result):
         assert result.timeseries["Standardkraft"].iloc[0] == pytest.approx(0.0)
