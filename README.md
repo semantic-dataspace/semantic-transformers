@@ -5,7 +5,7 @@ files and the [semantic-schemas](../semantic-schemas/) knowledge graph pipeline.
 
 ## What this repository contains
 
-```
+```text
 semantic-transformers/
   src/semantic_transformers/   Python library (Converter, Extractor protocol)
   parsers/                     Machine-specific file parsers, mirroring the
@@ -53,7 +53,7 @@ pip install -e .
 
 Both repositories are designed to be cloned as siblings:
 
-```
+```text
 semantic-dataspace/
   semantic-schemas/      ← schemas, transforms, notebooks
   semantic-transformers/ ← this repository
@@ -93,7 +93,7 @@ print(result.dataframe.head())
 
 For a full interactive walkthrough, open the tensile test notebook:
 
-```
+```text
 semantic-schemas/schemas/characterization/tensile-test/TTO/docs/tensile_test_csv_workflow.ipynb
 ```
 

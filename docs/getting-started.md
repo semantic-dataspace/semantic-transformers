@@ -32,7 +32,7 @@ pip install jupyterlab              # only needed for the interactive notebooks
 Each schema in `semantic-schemas` has a notebook in its `docs/` folder. For
 tensile test data from a Zwick/Roell machine, open:
 
-```
+```text
 semantic-schemas/schemas/characterization/tensile-test/TTO/docs/tensile_test_csv_workflow.ipynb
 ```
 

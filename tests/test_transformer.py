@@ -180,5 +180,3 @@ def test_transformer_none_timeseries_is_allowed(schema_dir):
     result = transformer.run("ignored.csv")
 
     assert result.dataframe is None
-
-

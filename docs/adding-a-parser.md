@@ -78,7 +78,7 @@ repository.
 
 ### Folder structure
 
-```
+```text
 parsers/<domain>/<specialisation>/<machine>/
   extractor.py         Reads the instrument file → ExtractionResult
   column_mapping.json  Maps column names to ontology IRIs and QUDT units
@@ -89,7 +89,7 @@ parsers/<domain>/<specialisation>/<machine>/
 The folder path mirrors the `schemas/` tree in `semantic-schemas`, but
 without the ontology subfolder. For example:
 
-```
+```text
 schemas/characterization/tensile-test/TTO/   ← schema
 parsers/characterization/tensile-test/zwick/ ← parser
 ```
@@ -132,6 +132,7 @@ class MyExtractor:
 ```
 
 Rules:
+
 - `simplified_json` must use field names from the target schema's
   `simplified/schema.simplified.json`. Unknown keys are ignored by the
   JSONata transform.
