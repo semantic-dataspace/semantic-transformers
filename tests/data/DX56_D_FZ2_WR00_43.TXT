@@ -1,0 +1,43 @@
+"Prüfinstitut"	"institute_1"
+"Projektnummer"	"123456"
+"Projektname"	"DX56 Characterization"
+"Datum/Uhrzeit"	44335.4	""
+"Maschinendaten"	"Zwick Z100"
+"Kraftaufnehmer"	"KA-001"
+"Wegaufnehmer"	"WA-001"
+"Prüfnorm"	"ISO 6892-1"
+"Werkstoff"	"DX56"
+"Probentyp"	"flat"
+"Prüfer"	"J. Schmidt"
+"Probenkennung 2"	"DX56-A"
+"Messlänge Standardweg"	80	"mm"
+"Versuchslänge"	120	"mm"
+"Probendicke"	1.55	"mm"
+"Probenbreite"	20.04	"mm"
+"Prüfgeschwindigkeit"	0.1	"mm/s"
+"Vorkraft"	2	"MPa"
+"Temperatur"	22	"°C"
+"Bemerkung"	""
+"Prüfzeit"	"Standardkraft"	"Traversenweg absolut"	"Standardweg"	"Breitenänderung"	"Dehnung"
+"s"	"N"	"mm"	"mm"	"mm"	"mm"
+0.0	0.0	0.0	0.0	0.0	0.0
+0.1	102.3	0.01	0.08	-0.001	0.10
+0.2	205.8	0.02	0.16	-0.002	0.20
+0.3	310.1	0.03	0.24	-0.003	0.30
+0.4	415.4	0.04	0.32	-0.004	0.40
+0.5	521.7	0.05	0.40	-0.005	0.50
+0.6	628.9	0.06	0.48	-0.006	0.60
+0.7	737.2	0.07	0.56	-0.007	0.70
+0.8	846.5	0.08	0.64	-0.008	0.80
+0.9	956.8	0.09	0.72	-0.009	0.90
+1.0	1068.1	0.10	0.80	-0.010	1.00
+1.1	1180.4	0.11	0.88	-0.011	1.10
+1.2	1293.7	0.12	0.96	-0.012	1.20
+1.3	1408.0	0.13	1.04	-0.013	1.30
+1.4	1523.3	0.14	1.12	-0.014	1.40
+1.5	1639.6	0.15	1.20	-0.015	1.50
+1.6	1756.9	0.16	1.28	-0.016	1.60
+1.7	1875.2	0.17	1.36	-0.017	1.70
+1.8	1994.5	0.18	1.44	-0.018	1.80
+1.9	2114.8	0.19	1.52	-0.019	1.90
+2.0	2236.1	0.20	1.60	-0.020	2.00

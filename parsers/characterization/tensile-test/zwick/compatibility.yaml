@@ -1,0 +1,61 @@
+# Compatibility matrix for the Zwick/Roell tensile test extractor
+#
+# schema:  the semantic-schemas path this extractor targets
+# tested_with:  schema versions confirmed to work end-to-end
+# machines:  instrument models and software versions this extractor was written for
+# columns:  measurement columns the extractor recognises and maps to TTO classes
+
+schema:
+  path: characterization/tensile-test/TTO
+  ontology: Tensile Test Ontology (TTO)
+
+tested_with:
+  - schema_ref: characterization/tensile-test/TTO
+    status: verified
+    notes: >
+      Tested with the simplified schema and transform.jsonata as of
+      semantic-schemas v0.1.0.  Re-verify after any change to
+      simplified/transform.jsonata or specs/schema.oold.yaml.
+
+machines:
+  - brand: Zwick/Roell
+    models:
+      - Z020
+      - Z100
+      - Z250
+    software: testXpert III
+    export_format: tab-separated text (.TXT), UTF-8
+    encoding_notes: >
+      Metadata rows use quoted German labels.  The extractor maps
+      "Prüfnorm" → test_standard, "Temperatur" → temperature,
+      "Prüfgeschwindigkeit" → strain_rate.  All other metadata rows
+      are preserved in the raw file but not mapped to the schema.
+
+columns:
+  - key: Prüfzeit
+    tto_class: tto:TestTime
+    qudt_unit: unit:SEC
+  - key: Standardkraft
+    tto_class: tto:StandardForce
+    qudt_unit: unit:N
+  - key: Traversenweg absolut
+    tto_class: tto:AbsoluteCrossheadTravel
+    qudt_unit: unit:MilliM
+  - key: Standardweg
+    tto_class: tto:Extension
+    qudt_unit: unit:MilliM
+  - key: Breitenänderung
+    tto_class: tto:WidthChange
+    qudt_unit: unit:MilliM
+  - key: Dehnung
+    tto_class: tto:Elongation
+    qudt_unit: unit:MilliM
+
+known_limitations:
+  - Scalar result values (Rp0.2, Rm, A, Z) are not exported by the Zwick
+    software and must be provided separately or computed from the time series.
+  - Files with non-UTF-8 encoding (e.g. Windows-1252) must be re-encoded
+    before use.
+  - The extractor assumes exactly 20 metadata rows.  Files from older
+    testXpert versions with a different header length will need adjustment
+    of the _METADATA_ROWS constant in extractor.py.

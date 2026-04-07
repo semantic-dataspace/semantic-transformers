@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semantic-transformers"
+version = "0.1.0"
+description = "Converters and machine-file parsers for semantic schema pipelines"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas",
+    "rdflib",
+    "pyyaml",
+    "jsonata-python",
+]
+
+[project.optional-dependencies]
+excel = ["openpyxl"]
+dev   = ["pytest", "nbmake"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning:rdflib",
+]
