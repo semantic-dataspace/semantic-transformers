@@ -2,9 +2,9 @@
 
 This guide covers two scenarios:
 
-- **Your instrument file is similar to an existing parser** — adjust it with a
+- **Your instrument file is similar to an existing parser**: adjust it with a
   config file or constructor arguments (no Python needed)
-- **Your instrument has a completely different file format** — write a new
+- **Your instrument has a completely different file format**: write a new
   extractor from scratch
 
 ---
@@ -12,8 +12,8 @@ This guide covers two scenarios:
 ## Scenario A: adapting an existing parser
 
 If your machine exports a file that is *structurally similar* to one the
-repository already handles — same section layout, just different label names,
-a different metadata row count, or different column names — you can configure
+repository already handles (same section layout, just different label names,
+a different metadata row count, or different column names), you can configure
 the existing extractor without touching Python.
 
 ### Using a config YAML (recommended)
@@ -72,7 +72,7 @@ ZwickExtractor(
 
 ## Scenario B: writing a new extractor
 
-Use this path when the file format is fundamentally different — different
+Use this path when the file format is fundamentally different: different
 section structure, binary format, or a machine family not yet in the
 repository.
 
@@ -114,6 +114,10 @@ Copy the Zwick extractor as a starting point:
 cp parsers/characterization/tensile-test/zwick/extractor.py \
    parsers/<domain>/<specialisation>/<machine>/extractor.py
 ```
+
+Open the copy and adjust `_parse_metadata()` and `_parse_timeseries()` for
+your file's structure. Everything else (`__init__`, `extract()`, the
+`from_config()` classmethod) can stay as-is until you need to change it.
 
 Your extractor must implement one method:
 
