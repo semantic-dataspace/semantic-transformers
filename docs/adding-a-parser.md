@@ -82,8 +82,7 @@ repository.
 parsers/<domain>/<specialisation>/<machine>/
   extractor.py         Reads the instrument file → ExtractionResult
   column_mapping.json  Maps column names to ontology IRIs and QUDT units
-  compatibility.yaml   Documents which schemas and instruments this covers
-  README.md            Quick-start and known limitations
+  README.md            Quick-start, schema compatibility, and known limitations
 ```
 
 The folder path mirrors the `schemas/` tree in `semantic-schemas`, but
@@ -158,17 +157,19 @@ Rules:
 Columns without a known ontology class can be omitted; they still appear in
 the DataFrame.
 
-### Step 5: write compatibility.yaml
+### Step 5: write README.md
 
-Copy and edit `parsers/characterization/tensile-test/zwick/compatibility.yaml`.
-Update `tested_with` whenever the target schema changes.
+Include these sections (use the Zwick README as a template):
 
-### Step 6: write README.md
+- **Schema compatibility**: the `semantic-schemas` path and version you tested against, and
+  which files are used (`transform.jsonata`, `schema.oold.yaml`, `shape.ttl`).
+  Update the version whenever you re-test against a newer schema release.
+- **Supported instruments**: brand, models, software version, export format.
+- **File layout**: what the extractor expects to find in the file.
+- **Quick start**: a minimal code snippet.
+- **Known limitations**.
 
-Include: supported models, what the extractor reads, known limitations,
-and a quick-start code snippet.
-
-### Step 7: test end-to-end
+### Step 6: test end-to-end
 
 ```python
 import sys
@@ -209,7 +210,7 @@ if not conforms:
 
 Open a pull request with:
 
-- The four files in the correct folder
+- The three files in the correct folder (`extractor.py`, `column_mapping.json`, `README.md`)
 - A sample instrument file in `tests/data/` (anonymised if needed)
 - A test module that runs `transformer.run()` on the sample file
 

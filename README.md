@@ -14,8 +14,7 @@ semantic-transformers/
         <machine>/             One folder per instrument model
           extractor.py         Reads the instrument file
           column_mapping.json  Maps column names to ontology class IRIs and units
-          compatibility.yaml   Which schemas and machines this covers
-          README.md            Quick-start and known limitations
+          README.md            Quick-start, schema compatibility, and known limitations
   docs/                        Guides for users and contributors
 ```
 

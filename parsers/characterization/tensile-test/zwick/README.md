@@ -4,6 +4,14 @@ Reads a Zwick/Roell testXpert III export and converts it to the
 `characterization/tensile-test/TTO` simplified schema, ready to be fed into
 a `Transformer`.
 
+## Schema compatibility
+
+| Schema | Version | Files used |
+|---|---|---|
+| `characterization/tensile-test/TTO` | 1.0.0 | `simplified/transform.jsonata`, `specs/schema.oold.yaml`, `specs/shape.ttl` |
+
+Update the version here whenever you re-test against a newer schema release.
+
 ## Supported instruments
 
 | Brand | Models | Software | Export format |
@@ -48,7 +56,7 @@ print(result.dataframe.head())
 ```
 
 For a full walkthrough, see the
-[tensile test CSV notebook](../../../../../semantic-schemas/schemas/characterization/tensile-test/TTO/docs/tensile_test_csv_workflow.ipynb).
+[tensile test CSV notebook](../../../../../semantic-schemas/schemas/characterization/tensile-test/TTO/docs/2_tensile_test_csv_workflow.ipynb).
 
 ## Adapting to your Zwick file variant
 
