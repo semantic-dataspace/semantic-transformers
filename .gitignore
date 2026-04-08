@@ -81,6 +81,8 @@ target/
 # Notebook-generated output files
 **/docs/*.ttl
 **/docs/*.parquet
+**/docs/*.xlsx
+**/docs/*.yaml
 
 # IPython
 profile_default/
