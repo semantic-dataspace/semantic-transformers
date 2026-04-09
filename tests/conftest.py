@@ -22,6 +22,10 @@ for _d in _PARSER_DIRS:
     if _s not in sys.path:
         sys.path.insert(0, _s)
 
+# 'parser' is a (deprecated) stdlib module in Python ≤ 3.11. Parser files
+# in the parsers/ tree are therefore named after the instrument
+# (e.g. zwick_parser.py) rather than simply parser.py to avoid shadowing it.
+
 
 @pytest.fixture(scope="session")
 def zwick_txt():

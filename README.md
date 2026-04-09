@@ -12,7 +12,7 @@ semantic-transformers/
     <domain>/                  Mirrors the semantic-schemas folder structure
       <specialisation>/
         <machine>/             One folder per instrument model
-          extractor.py         Reads the instrument file
+          <machine>_parser.py  Reads the instrument file
           column_mapping.json  Maps column names to ontology class IRIs and units
           README.md            Quick-start, schema compatibility, and known limitations
   docs/                        Guides for users and contributors
@@ -24,11 +24,11 @@ semantic-transformers/
 
 | Class | Role |
 |---|---|
-| `Extractor` | Protocol to implement when adding support for a new instrument |
-| `ExtractionResult` | What every extractor returns: simplified JSON + DataFrame |
-| `Transformer` | Runs extraction → JSONata transform → RDF graph |
+| `Parser` | Protocol to implement when adding support for a new instrument |
+| `ParseResult` | What every parser returns: simplified JSON + DataFrame |
+| `Transformer` | Runs parsing → JSONata transform → RDF graph |
 | `TransformResult` | What `Transformer.run()` returns: RDF graph + DataFrame |
-| `QuickMapper` | Turns any tabular file into RDF using a simple YAML mapping (no extractor needed) |
+| `QuickMapper` | Turns any tabular file into RDF using a simple YAML mapping (no parser needed) |
 
 ### 2. The parsers (`parsers/`)
 

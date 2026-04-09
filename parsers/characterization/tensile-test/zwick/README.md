@@ -41,13 +41,12 @@ Mapped metadata fields:
 import sys
 sys.path.insert(0, '/path/to/semantic-transformers/parsers/characterization/tensile-test/zwick')
 
-from extractor import ZwickExtractor
+from zwick_parser import ZwickParser
 from semantic_transformers import Transformer
 
 transformer = Transformer(
-    extractor = ZwickExtractor(),
-    transform = '/path/to/semantic-schemas/schemas/characterization/tensile-test/TTO/simplified/transform.jsonata',
-    context   = '/path/to/semantic-schemas/schemas/characterization/tensile-test/TTO/specs/schema.oold.yaml',
+    parser          = ZwickParser(),
+    semantic_schema = '/path/to/semantic-schemas/schemas/characterization/tensile-test/TTO/',
 )
 
 result = transformer.run('my_test.TXT')
@@ -70,31 +69,31 @@ Create a `parser_config.yaml` next to your data file:
 metadata_rows: 15               # rows before the column-header row
 strain_rate_label: null         # null = skip; default is "Prüfgeschwindigkeit"
 meta_field_map:
-  Temperature: [temperature, float]
-  Standard:    [test_standard, str]
-  Speed:       [strain_rate, float]
+  Temperature: temperature
+  Standard:    test_standard
+  Speed:       strain_rate
 ```
 
 Then pass it to `from_config()`:
 
 ```python
-ZwickExtractor.from_config("parser_config.yaml")
+ZwickParser.from_config("parser_config.yaml")
 ```
 
 The same settings are available as keyword arguments if you prefer to stay in Python:
 
 ```python
-ZwickExtractor(
+ZwickParser(
     metadata_rows     = 15,
     strain_rate_label = None,
-    meta_field_map    = {"Temperature": ("temperature", "float")},
+    meta_field_map    = {"Temperature": "temperature"},
 )
 ```
 
 For a completely different file structure (different section layout, binary
-format), copy this extractor and override `_parse_metadata()` and
+format), copy this parser and override `_parse_metadata()` and
 `_parse_timeseries()`. The `Transformer` and the schema do not need to change.
-See `docs/adding-a-parser.md` for the full guide.
+See `docs/2_adding-a-parser.md` for the full guide.
 
 ## Known limitations
 

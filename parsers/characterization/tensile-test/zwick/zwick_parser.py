@@ -1,5 +1,5 @@
 """
-Extractor for Zwick/Roell tensile test CSV files.
+Parser for Zwick/Roell tensile test CSV files.
 
 File format
 -----------
@@ -15,7 +15,7 @@ The Zwick software exports a tab-separated file with two sections:
 
 Output
 ------
-Produces an ExtractionResult where:
+Produces a ParseResult where:
   simplified_json  maps the metadata to the tensile-test/TTO simplified schema
   timeseries       is a pandas DataFrame with the original German column names
   column_iris      maps each column to its TTO class IRI  (from column_mapping.json)
@@ -23,28 +23,26 @@ Produces an ExtractionResult where:
 
 Schema-driven type coercion
 ---------------------------
-Pass the path to ``simplified/schema.simplified.json`` so that field types are
-read from the schema rather than hard-coded in the extractor:
+ZwickParser implements SchemaAwareParser so that when it is used with a
+Transformer that has an input_schema (or semantic_schema), the Transformer
+automatically calls configure(schema) to share the loaded schema dict.
+The parser then reads the ``type`` for each field and casts accordingly
+(``"number"`` / ``"integer"`` → float/int, ``"string"`` → str).
 
-    ZwickExtractor(simplified_schema_path="path/to/schema.simplified.json")
-
-When provided, the extractor reads the ``type`` for each field from the JSON
-Schema and casts accordingly (``"number"`` / ``"integer"`` → float/int,
-``"string"`` → str).  This means adding a new numeric or string field to the
-schema requires no code change in the extractor — only a new entry in
-``meta_field_map`` mapping the CSV label to the new field name.
+This means adding a new numeric or string field to the schema requires no code
+change in the parser — only a new entry in meta_field_map.  No schema path
+needs to be passed to the parser directly.
 
 Adapting to file variants
 -------------------------
 If your Zwick software version or machine template produces a different number
 of metadata rows, uses different labels, or is localised to another language,
-point the extractor at a YAML config file instead of changing Python code:
+point the parser at a YAML config file instead of changing Python code:
 
-    ZwickExtractor.from_config("my_parser_config.yaml")
+    ZwickParser.from_config("my_parser_config.yaml")
 
 The config file supports these keys (all optional):
 
-    simplified_schema_path: path/to/schema.simplified.json
     metadata_rows: 15               # rows before the column-header row
     strain_rate_label: null         # set to null to skip
     meta_field_map:
@@ -53,7 +51,7 @@ The config file supports these keys (all optional):
 
 Alternatively, pass the same values directly as keyword arguments:
 
-    ZwickExtractor(metadata_rows=15, strain_rate_label=None)
+    ZwickParser(metadata_rows=15, strain_rate_label=None)
 
 For a completely different file structure, copy this file and override
 _parse_metadata() and _parse_timeseries().  The Transformer and the schema
@@ -71,7 +69,8 @@ import yaml
 
 import pandas as pd
 
-from semantic_transformers import ExtractionResult
+from semantic_transformers import ParseResult
+from semantic_transformers.parser import SchemaAwareParser
 
 # Default number of leading rows that are metadata before the column-header row.
 _DEFAULT_METADATA_ROWS = 20
@@ -81,8 +80,8 @@ _DEFAULT_METADATA_ROWS = 20
 # Keys are the German metadata labels as exported by Zwick software.
 # Values are field names defined in schema.simplified.json.
 # Adding a new field to the schema only requires a new entry here — no other
-# code changes are needed, provided simplified_schema_path is passed so that
-# the correct type is read from the schema.
+# code changes are needed; the Transformer shares the loaded schema via
+# configure() so types are always read from the current schema version.
 _DEFAULT_META_FIELD_MAP: dict[str, str] = {
     "Prüfnorm":            "test_standard",
     "Temperatur":          "temperature",
@@ -93,31 +92,26 @@ _DEFAULT_META_FIELD_MAP: dict[str, str] = {
 _STRAIN_RATE_LABEL = "Prüfgeschwindigkeit"
 
 
-class ZwickExtractor:
+class ZwickParser(SchemaAwareParser):
     """
-    Reads a Zwick/Roell tensile test export and returns an ExtractionResult
+    Reads a Zwick/Roell tensile test export and returns a ParseResult
     compatible with the ``characterization/tensile-test/TTO`` schema.
+
+    When used with ``Transformer``, the Transformer automatically calls
+    ``configure(schema)`` to share the loaded input schema — no schema path
+    needs to be passed to this parser directly.
 
     Parameters
     ----------
     column_mapping_path:
         Path to the ``column_mapping.json`` file that lives next to this
-        extractor.  Pass ``None`` to use the default file next to this module.
-    simplified_schema_path:
-        Path to ``simplified/schema.simplified.json``.  When provided, field
-        types (``"number"``, ``"string"``, etc.) are read from the schema and
-        used for type coercion instead of being inferred heuristically.
-        Recommended: always pass this so the extractor stays in sync with the
-        schema without requiring code changes when new fields are added.
+        parser.  Pass ``None`` to use the default file next to this module.
     metadata_rows:
         Number of leading rows that form the metadata block before the
-        column-header row.  Default: 20.  Adjust for software versions or
-        machine variants that produce a shorter or longer header block.
+        column-header row.  Default: 20.
     meta_field_map:
         Mapping of metadata label strings to simplified JSON field names.
-        Overrides the default German-label map when provided.  Useful when the
-        exported labels differ (e.g. localised to another language or a custom
-        template).
+        Overrides the default German-label map when provided.
     strain_rate_label:
         The metadata label whose unit column is carried into the simplified
         JSON as ``strain_rate_unit``.  Default: ``"Prüfgeschwindigkeit"``.
@@ -127,7 +121,6 @@ class ZwickExtractor:
     def __init__(
         self,
         column_mapping_path: Optional[Path] = None,
-        simplified_schema_path: Optional[Path] = None,
         *,
         metadata_rows: int = _DEFAULT_METADATA_ROWS,
         meta_field_map: Optional[dict[str, str]] = None,
@@ -143,16 +136,22 @@ class ZwickExtractor:
         self._metadata_rows     = metadata_rows
         self._meta_field_map    = meta_field_map if meta_field_map is not None else _DEFAULT_META_FIELD_MAP
         self._strain_rate_label = strain_rate_label
-
-        # Load field types from schema.simplified.json so type coercion is
-        # schema-driven rather than hard-coded.
         self._field_types: dict[str, str] = {}
-        if simplified_schema_path is not None:
-            schema = json.loads(Path(simplified_schema_path).read_text(encoding="utf-8"))
-            self._field_types = {
-                name: prop.get("type", "string")
-                for name, prop in schema.get("properties", {}).items()
-            }
+
+    # ------------------------------------------------------------------
+
+    def configure(self, schema: dict) -> None:
+        """
+        Receive the loaded input schema from Transformer.
+
+        Called automatically by Transformer.__init__ when an input_schema or
+        semantic_schema is provided.  Populates field type information used by
+        _cast() so values are coerced to the types declared in the schema.
+        """
+        self._field_types = {
+            name: prop.get("type", "string")
+            for name, prop in schema.get("properties", {}).items()
+        }
 
     # ------------------------------------------------------------------
 
@@ -161,20 +160,18 @@ class ZwickExtractor:
         cls,
         config_path: str | Path,
         column_mapping_path: Optional[Path] = None,
-    ) -> "ZwickExtractor":
+    ) -> "ZwickParser":
         """
-        Create a ZwickExtractor from a YAML config file.
+        Create a ZwickParser from a YAML config file.
 
         Supported config keys (all optional)
         -------------------------------------
-        simplified_schema_path: str  — path to schema.simplified.json
-        metadata_rows:          int  — rows before the column-header row
-        strain_rate_label:      str | null
-        meta_field_map:         dict — label → field_name
+        metadata_rows:     int  — rows before the column-header row
+        strain_rate_label: str | null
+        meta_field_map:    dict — label → field_name
 
         Example
         -------
-        simplified_schema_path: ../../simplified/schema.simplified.json
         metadata_rows: 15
         strain_rate_label: null
         meta_field_map:
@@ -187,22 +184,16 @@ class ZwickExtractor:
         if "meta_field_map" in cfg:
             meta_field_map = dict(cfg["meta_field_map"])
 
-        simplified_schema_path = None
-        if "simplified_schema_path" in cfg:
-            # Resolve relative to the config file's directory.
-            simplified_schema_path = Path(config_path).parent / cfg["simplified_schema_path"]
-
         return cls(
-            column_mapping_path     = column_mapping_path,
-            simplified_schema_path  = simplified_schema_path,
-            metadata_rows           = cfg.get("metadata_rows", _DEFAULT_METADATA_ROWS),
-            meta_field_map          = meta_field_map,
-            strain_rate_label       = cfg.get("strain_rate_label", _STRAIN_RATE_LABEL),
+            column_mapping_path = column_mapping_path,
+            metadata_rows       = cfg.get("metadata_rows", _DEFAULT_METADATA_ROWS),
+            meta_field_map      = meta_field_map,
+            strain_rate_label   = cfg.get("strain_rate_label", _STRAIN_RATE_LABEL),
         )
 
     # ------------------------------------------------------------------
 
-    def extract(self, path: Path) -> ExtractionResult:
+    def parse(self, path: Path) -> ParseResult:
         rows = list(
             csv.reader(
                 path.open(encoding="utf-8"),
@@ -218,7 +209,7 @@ class ZwickExtractor:
         col_iris  = {h: self._col_iris[h]  for h in headers if h in self._col_iris}
         col_units = {h: self._col_units[h] for h in headers if h in self._col_units}
 
-        return ExtractionResult(
+        return ParseResult(
             simplified_json = simplified,
             timeseries      = ts,
             column_iris     = col_iris,
@@ -243,9 +234,9 @@ class ZwickExtractor:
 
     def _cast(self, value_str: str, field_name: str) -> str | float | int:
         """
-        Cast *value_str* to the type declared for *field_name* in the
-        simplified schema.  Falls back to a heuristic (float if parseable,
-        otherwise str) when no schema was provided or the field is not listed.
+        Cast *value_str* to the type declared for *field_name* in the schema.
+        Falls back to a heuristic (float if parseable, otherwise str) when
+        configure() has not been called or the field is not listed.
         """
         field_type = self._field_types.get(field_name, "")
         if field_type in ("number", "integer"):
@@ -255,7 +246,7 @@ class ZwickExtractor:
                 return value_str
         if field_type == "string":
             return value_str
-        # No schema: try float, fall back to str.
+        # No schema type known: try float, fall back to str.
         try:
             return float(value_str)
         except ValueError:

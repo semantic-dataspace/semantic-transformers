@@ -2,7 +2,7 @@
 Unit tests for the Transformer class.
 
 Uses a minimal inline schema (transform + context written to a tmp directory)
-and a hand-rolled mock extractor so these tests have no dependency on
+and a hand-rolled mock parser so these tests have no dependency on
 semantic-schemas or any real instrument file.
 """
 import json
@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 import rdflib
 
-from semantic_transformers import Transformer, TransformResult, ExtractionResult
+from semantic_transformers import Transformer, TransformResult, ParseResult
 
 
 # ---------------------------------------------------------------------------
@@ -55,8 +55,8 @@ def schema_dir(tmp_path):
 
 @pytest.fixture()
 def mock_extraction():
-    """A hand-rolled ExtractionResult with known values."""
-    return ExtractionResult(
+    """A hand-rolled ParseResult with known values."""
+    return ParseResult(
         simplified_json={"test_name": "mock-run", "temperature": 23.0},
         timeseries=pd.DataFrame({"force": [0.0, 100.0, 200.0], "extension": [0.0, 1.0, 2.0]}),
         column_iris={"force": "https://example.org/vocab/Force"},
@@ -64,11 +64,11 @@ def mock_extraction():
     )
 
 
-class MockExtractor:
-    def __init__(self, result: ExtractionResult):
+class MockParser:
+    def __init__(self, result: ParseResult):
         self._result = result
 
-    def extract(self, path: Path) -> ExtractionResult:
+    def parse(self, path: Path) -> ParseResult:
         return self._result
 
 
@@ -78,9 +78,9 @@ class MockExtractor:
 
 def test_transformer_returns_transform_result(schema_dir, mock_extraction):
     transformer = Transformer(
-        extractor=MockExtractor(mock_extraction),
-        transform=schema_dir / "simplified" / "transform.jsonata",
-        context=schema_dir / "specs" / "schema.oold.yaml",
+        parser=MockParser(mock_extraction),
+        jsonata=schema_dir / "simplified" / "transform.jsonata",
+        oold_schema=schema_dir / "specs" / "schema.oold.yaml",
     )
     result = transformer.run("ignored.csv")
 
@@ -89,9 +89,9 @@ def test_transformer_returns_transform_result(schema_dir, mock_extraction):
 
 def test_transformer_oold_doc_contains_transform_output(schema_dir, mock_extraction):
     transformer = Transformer(
-        extractor=MockExtractor(mock_extraction),
-        transform=schema_dir / "simplified" / "transform.jsonata",
-        context=schema_dir / "specs" / "schema.oold.yaml",
+        parser=MockParser(mock_extraction),
+        jsonata=schema_dir / "simplified" / "transform.jsonata",
+        oold_schema=schema_dir / "specs" / "schema.oold.yaml",
     )
     result = transformer.run("ignored.csv")
 
@@ -99,11 +99,11 @@ def test_transformer_oold_doc_contains_transform_output(schema_dir, mock_extract
     assert result.oold_doc["temperature"] == 23.0
 
 
-def test_transformer_override_wins_over_extractor(schema_dir, mock_extraction):
+def test_transformer_override_wins_over_parser(schema_dir, mock_extraction):
     transformer = Transformer(
-        extractor=MockExtractor(mock_extraction),
-        transform=schema_dir / "simplified" / "transform.jsonata",
-        context=schema_dir / "specs" / "schema.oold.yaml",
+        parser=MockParser(mock_extraction),
+        jsonata=schema_dir / "simplified" / "transform.jsonata",
+        oold_schema=schema_dir / "specs" / "schema.oold.yaml",
     )
     result = transformer.run("ignored.csv", test_name="overridden")
 
@@ -112,9 +112,9 @@ def test_transformer_override_wins_over_extractor(schema_dir, mock_extraction):
 
 def test_transformer_graph_is_non_empty(schema_dir, mock_extraction):
     transformer = Transformer(
-        extractor=MockExtractor(mock_extraction),
-        transform=schema_dir / "simplified" / "transform.jsonata",
-        context=schema_dir / "specs" / "schema.oold.yaml",
+        parser=MockParser(mock_extraction),
+        jsonata=schema_dir / "simplified" / "transform.jsonata",
+        oold_schema=schema_dir / "specs" / "schema.oold.yaml",
     )
     result = transformer.run("ignored.csv")
 
@@ -127,9 +127,9 @@ def test_transformer_graph_is_non_empty(schema_dir, mock_extraction):
 
 def test_transformer_graph_contains_expected_type(schema_dir, mock_extraction):
     transformer = Transformer(
-        extractor=MockExtractor(mock_extraction),
-        transform=schema_dir / "simplified" / "transform.jsonata",
-        context=schema_dir / "specs" / "schema.oold.yaml",
+        parser=MockParser(mock_extraction),
+        jsonata=schema_dir / "simplified" / "transform.jsonata",
+        oold_schema=schema_dir / "specs" / "schema.oold.yaml",
     )
     result = transformer.run("ignored.csv")
 
@@ -144,9 +144,9 @@ def test_transformer_graph_contains_expected_type(schema_dir, mock_extraction):
 
 def test_transformer_dataframe_is_passed_through(schema_dir, mock_extraction):
     transformer = Transformer(
-        extractor=MockExtractor(mock_extraction),
-        transform=schema_dir / "simplified" / "transform.jsonata",
-        context=schema_dir / "specs" / "schema.oold.yaml",
+        parser=MockParser(mock_extraction),
+        jsonata=schema_dir / "simplified" / "transform.jsonata",
+        oold_schema=schema_dir / "specs" / "schema.oold.yaml",
     )
     result = transformer.run("ignored.csv")
 
@@ -157,9 +157,9 @@ def test_transformer_dataframe_is_passed_through(schema_dir, mock_extraction):
 
 def test_transformer_column_metadata_passed_through(schema_dir, mock_extraction):
     transformer = Transformer(
-        extractor=MockExtractor(mock_extraction),
-        transform=schema_dir / "simplified" / "transform.jsonata",
-        context=schema_dir / "specs" / "schema.oold.yaml",
+        parser=MockParser(mock_extraction),
+        jsonata=schema_dir / "simplified" / "transform.jsonata",
+        oold_schema=schema_dir / "specs" / "schema.oold.yaml",
     )
     result = transformer.run("ignored.csv")
 
@@ -168,14 +168,14 @@ def test_transformer_column_metadata_passed_through(schema_dir, mock_extraction)
 
 
 def test_transformer_none_timeseries_is_allowed(schema_dir):
-    no_ts = ExtractionResult(
+    no_ts = ParseResult(
         simplified_json={"test_name": "no-ts", "temperature": 20.0},
         timeseries=None,
     )
     transformer = Transformer(
-        extractor=MockExtractor(no_ts),
-        transform=schema_dir / "simplified" / "transform.jsonata",
-        context=schema_dir / "specs" / "schema.oold.yaml",
+        parser=MockParser(no_ts),
+        jsonata=schema_dir / "simplified" / "transform.jsonata",
+        oold_schema=schema_dir / "specs" / "schema.oold.yaml",
     )
     result = transformer.run("ignored.csv")
 

@@ -1,7 +1,7 @@
 """
 QuickMapper: turn any tabular file into RDF with a simple mapping config.
 
-No schema, no JSONata transform, no custom extractor required.  The user
+No schema, no JSONata transform, no custom parser required.  The user
 provides a YAML config that names the columns and points each one at an
 ontology class IRI and an optional QUDT unit.  Everything else is automatic.
 

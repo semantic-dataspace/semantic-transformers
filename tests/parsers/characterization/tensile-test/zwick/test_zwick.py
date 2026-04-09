@@ -1,5 +1,5 @@
 """
-Tests for the Zwick/Roell extractor.
+Tests for the Zwick/Roell parser.
 
 Pure unit tests — no schema files, no Transformer, no RDF.
 The conftest session fixture puts the parser directory on sys.path.
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from extractor import ZwickExtractor
+from zwick_parser import ZwickParser
 
 
 # ---------------------------------------------------------------------------
@@ -17,13 +17,13 @@ from extractor import ZwickExtractor
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
-def extractor():
-    return ZwickExtractor()
+def parser():
+    return ZwickParser()
 
 
 @pytest.fixture(scope="module")
-def result(extractor, zwick_txt):
-    return extractor.extract(zwick_txt)
+def result(parser, zwick_txt):
+    return parser.parse(zwick_txt)
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +109,7 @@ def test_custom_mapping_path(tmp_path, zwick_txt):
     mapping_file = tmp_path / "custom_mapping.json"
     mapping_file.write_text(json.dumps(mapping), encoding="utf-8")
 
-    result = ZwickExtractor(column_mapping_path=mapping_file).extract(zwick_txt)
+    result = ZwickParser(column_mapping_path=mapping_file).parse(zwick_txt)
 
     assert result.column_iris["Standardkraft"] == "https://example.org/Force"
     assert result.column_units["Standardkraft"] == "http://qudt.org/vocab/unit/N"
@@ -123,37 +123,36 @@ def test_custom_mapping_path(tmp_path, zwick_txt):
 
 def test_custom_metadata_rows(zwick_txt):
     """metadata_rows=20 (explicit) gives the same result as the default."""
-    default_result  = ZwickExtractor().extract(zwick_txt)
-    explicit_result = ZwickExtractor(metadata_rows=20).extract(zwick_txt)
+    default_result  = ZwickParser().parse(zwick_txt)
+    explicit_result = ZwickParser(metadata_rows=20).parse(zwick_txt)
     assert explicit_result.simplified_json == default_result.simplified_json
     assert len(explicit_result.timeseries) == len(default_result.timeseries)
 
 
 def test_custom_meta_field_map(zwick_txt):
     """A custom field map with an unknown label yields no fields from it."""
-    result = ZwickExtractor(
+    result = ZwickParser(
         meta_field_map={"NonExistentLabel": "my_field"},
         strain_rate_label=None,
-    ).extract(zwick_txt)
+    ).parse(zwick_txt)
     assert "my_field" not in result.simplified_json
     assert "strain_rate_unit" not in result.simplified_json
 
 
 def test_strain_rate_label_none(zwick_txt):
     """Setting strain_rate_label=None suppresses strain_rate_unit."""
-    result = ZwickExtractor(strain_rate_label=None).extract(zwick_txt)
+    result = ZwickParser(strain_rate_label=None).parse(zwick_txt)
     assert "strain_rate_unit" not in result.simplified_json
 
 
-def test_simplified_schema_drives_type_coercion(tmp_path, zwick_txt):
-    """When simplified_schema_path is given, field types come from the schema.
+def test_configure_drives_type_coercion(zwick_txt):
+    """After configure(), field types come from the schema.
 
-    Declare temperature as "string" so the extractor must return a str even
+    Declare temperature as "string" so the parser must return a str even
     though the raw value ("22.0") would normally be cast to float by the
     heuristic fallback.
     """
     schema = {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
             "test_standard": {"type": "string"},
@@ -161,10 +160,9 @@ def test_simplified_schema_drives_type_coercion(tmp_path, zwick_txt):
             "strain_rate":   {"type": "number"},
         },
     }
-    schema_file = tmp_path / "schema.simplified.json"
-    schema_file.write_text(json.dumps(schema), encoding="utf-8")
-
-    result = ZwickExtractor(simplified_schema_path=schema_file).extract(zwick_txt)
+    p = ZwickParser()
+    p.configure(schema)
+    result = p.parse(zwick_txt)
 
     # temperature declared as string → raw value kept as str, not cast to float
     assert isinstance(result.simplified_json["temperature"], str)
@@ -174,19 +172,17 @@ def test_simplified_schema_drives_type_coercion(tmp_path, zwick_txt):
     assert isinstance(result.simplified_json["test_standard"], str)
 
 
-def test_simplified_schema_number_field(tmp_path, zwick_txt):
-    """When the schema declares a field as "number", the value is a float."""
+def test_configure_number_field(zwick_txt):
+    """After configure(), a "number" field is cast to float."""
     schema = {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
             "temperature": {"type": "number"},
         },
     }
-    schema_file = tmp_path / "schema.simplified.json"
-    schema_file.write_text(json.dumps(schema), encoding="utf-8")
-
-    result = ZwickExtractor(simplified_schema_path=schema_file).extract(zwick_txt)
+    p = ZwickParser()
+    p.configure(schema)
+    result = p.parse(zwick_txt)
 
     assert isinstance(result.simplified_json["temperature"], float)
     assert result.simplified_json["temperature"] == pytest.approx(22.0)
@@ -202,7 +198,7 @@ def test_from_config(tmp_path, zwick_txt):
         "  Prüfnorm: test_standard\n",
         encoding="utf-8",
     )
-    result = ZwickExtractor.from_config(config).extract(zwick_txt)
+    result = ZwickParser.from_config(config).parse(zwick_txt)
     # Field map in config maps Prüfnorm → test_standard
     assert result.simplified_json["test_standard"] == "ISO 6892-1"
     # strain_rate_label: null → no strain_rate_unit

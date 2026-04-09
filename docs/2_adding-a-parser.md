@@ -5,7 +5,7 @@ This guide covers two scenarios:
 - **Your instrument file is similar to an existing parser**: adjust it with a
   config file or constructor arguments (no Python needed)
 - **Your instrument has a completely different file format**: write a new
-  extractor from scratch
+  parser from scratch
 
 ---
 
@@ -14,7 +14,7 @@ This guide covers two scenarios:
 If your machine exports a file that is *structurally similar* to one the
 repository already handles (same section layout, just different label names,
 a different metadata row count, or different column names), you can configure
-the existing extractor without touching Python.
+the existing parser without touching Python.
 
 ### Using a config YAML (recommended)
 
@@ -25,35 +25,33 @@ Create a YAML file next to your data file and pass it to `from_config()`:
 metadata_rows: 15           # rows before the column-header row (default: 20)
 strain_rate_label: null     # null = skip; use a label string to enable
 meta_field_map:
-  Temperature: [temperature, float]
-  Standard:    [test_standard, str]
-  Speed:       [strain_rate, float]
+  Temperature: temperature
+  Standard:    test_standard
+  Speed:       strain_rate
 ```
 
 ```python
-from extractor import ZwickExtractor
+from zwick_parser import ZwickParser
 from semantic_transformers import Transformer
 
 transformer = Transformer(
-    extractor = ZwickExtractor.from_config("parser_config.yaml"),
-    transform = ".../simplified/transform.jsonata",
-    context   = ".../specs/schema.oold.yaml",
+    parser          = ZwickParser.from_config("parser_config.yaml"),
+    semantic_schema = "/path/to/semantic-schemas/schemas/characterization/tensile-test/TTO/",
 )
 result = transformer.run("my_file.txt")
 ```
 
 ### Using keyword arguments
 
-Pass the same settings directly as keyword arguments when constructing the
-extractor:
+Pass the same settings directly as keyword arguments when constructing the parser:
 
 ```python
-ZwickExtractor(
+ZwickParser(
     metadata_rows     = 15,
     strain_rate_label = None,
     meta_field_map    = {
-        "Temperature": ("temperature", "float"),
-        "Standard":    ("test_standard", "str"),
+        "Temperature": "temperature",
+        "Standard":    "test_standard",
     },
 )
 ```
@@ -62,7 +60,7 @@ If you also need to use a custom `column_mapping.json` (to remap or rename
 measurement columns), pass it as the first argument:
 
 ```python
-ZwickExtractor(
+ZwickParser(
     "/path/to/my_column_mapping.json",
     metadata_rows = 15,
 )
@@ -70,7 +68,7 @@ ZwickExtractor(
 
 ---
 
-## Scenario B: writing a new extractor
+## Scenario B: writing a new parser
 
 Use this path when the file format is fundamentally different: different
 section structure, binary format, or a machine family not yet in the
@@ -80,7 +78,7 @@ repository.
 
 ```text
 parsers/<domain>/<specialisation>/<machine>/
-  extractor.py         Reads the instrument file → ExtractionResult
+  <machine>_parser.py  Reads the instrument file → ParseResult
   column_mapping.json  Maps column names to ontology IRIs and QUDT units
   README.md            Quick-start, schema compatibility, and known limitations
 ```
@@ -96,7 +94,7 @@ parsers/characterization/tensile-test/zwick/ ← parser
 ### Step 1: choose the target schema
 
 Decide which schema in `semantic-schemas` this parser feeds into. The
-simplified JSON your extractor produces must match the fields in that schema's
+simplified JSON your parser produces must match the fields in that schema's
 `simplified/schema.simplified.json`.
 
 ### Step 2: create the folder
@@ -105,28 +103,28 @@ simplified JSON your extractor produces must match the fields in that schema's
 mkdir -p parsers/<domain>/<specialisation>/<machine>/
 ```
 
-### Step 3: write the extractor
+### Step 3: write the parser
 
-Copy the Zwick extractor as a starting point:
+Copy the Zwick parser as a starting point:
 
 ```bash
-cp parsers/characterization/tensile-test/zwick/extractor.py \
-   parsers/<domain>/<specialisation>/<machine>/extractor.py
+cp parsers/characterization/tensile-test/zwick/zwick_parser.py \
+   parsers/<domain>/<specialisation>/<machine>/<machine>_parser.py
 ```
 
 Open the copy and adjust `_parse_metadata()` and `_parse_timeseries()` for
-your file's structure. Everything else (`__init__`, `extract()`, the
+your file's structure. Everything else (`__init__`, `parse()`, the
 `from_config()` classmethod) can stay as-is until you need to change it.
 
-Your extractor must implement one method:
+Your parser must implement one method:
 
 ```python
-from semantic_transformers import ExtractionResult
+from semantic_transformers import ParseResult
 
-class MyExtractor:
-    def extract(self, path: Path) -> ExtractionResult:
+class MyParser:
+    def parse(self, path: Path) -> ParseResult:
         ...
-        return ExtractionResult(
+        return ParseResult(
             simplified_json = { ... },  # fields matching the schema's simplified input
             timeseries      = df,        # pandas DataFrame or None
             column_iris     = { ... },  # column name → ontology class IRI
@@ -141,6 +139,33 @@ Rules:
   JSONata transform.
 - `timeseries` is optional. Pass `None` if the file has no tabular data.
 - `column_iris` and `column_units` are optional.
+
+#### Optional: schema-driven type coercion
+
+If your parser needs to cast raw string values to the types declared in the
+schema (e.g. `"22.0"` → `float` for a `"number"` field), inherit from
+`SchemaAwareParser` and implement `configure()`:
+
+```python
+from semantic_transformers import ParseResult
+from semantic_transformers.parser import SchemaAwareParser
+
+class MyParser(SchemaAwareParser):
+    def configure(self, schema: dict) -> None:
+        # Called automatically by Transformer with the loaded input schema.
+        self._field_types = {
+            name: prop.get("type", "string")
+            for name, prop in schema.get("properties", {}).items()
+        }
+
+    def parse(self, path: Path) -> ParseResult:
+        ...
+```
+
+`Transformer` detects `SchemaAwareParser` via `isinstance` and calls
+`configure(schema)` at construction time — before the first `run()` call.
+The user sees none of this; they just write
+`Transformer(parser=MyParser(), semantic_schema=...)` as normal.
 
 ### Step 4: create column_mapping.json
 
@@ -165,7 +190,7 @@ Include these sections (use the Zwick README as a template):
   which files are used (`transform.jsonata`, `schema.oold.yaml`, `shape.ttl`).
   Update the version whenever you re-test against a newer schema release.
 - **Supported instruments**: brand, models, software version, export format.
-- **File layout**: what the extractor expects to find in the file.
+- **File layout**: what the parser expects to find in the file.
 - **Quick start**: a minimal code snippet.
 - **Known limitations**.
 
@@ -175,13 +200,12 @@ Include these sections (use the Zwick README as a template):
 import sys
 sys.path.insert(0, 'parsers/<domain>/<specialisation>/<machine>')
 
-from extractor import MyExtractor
+from <machine>_parser import MyParser
 from semantic_transformers import Transformer
 
 transformer = Transformer(
-    extractor = MyExtractor(),
-    transform = '/path/to/semantic-schemas/schemas/.../simplified/transform.jsonata',
-    context   = '/path/to/semantic-schemas/schemas/.../specs/schema.oold.yaml',
+    parser          = MyParser(),
+    semantic_schema = '/path/to/semantic-schemas/schemas/.../',
 )
 
 result = transformer.run('my_test_file.csv')
@@ -210,7 +234,7 @@ if not conforms:
 
 Open a pull request with:
 
-- The three files in the correct folder (`extractor.py`, `column_mapping.json`, `README.md`)
+- The three files in the correct folder (`<machine>_parser.py`, `column_mapping.json`, `README.md`)
 - A sample instrument file in `tests/data/` (anonymised if needed)
 - A test module that runs `transformer.run()` on the sample file
 
