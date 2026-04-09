@@ -41,13 +41,26 @@ Each parser targets a specific instrument model. The folder path mirrors the
 
 ## Installation
 
+### Using pip (recommended)
+
+```bash
+# Install the transformers library
+pip install semantic-transformers
+
+# Optional: install optional dependencies
+pip install semantic-transformers[excel]  # for Excel file support
+pip install semantic-transformers[dev]    # for development and testing
+```
+
+### Development installation
+
 Both repositories are designed to be cloned as siblings under a shared folder:
 
 ```bash
 mkdir semantic-dataspace && cd semantic-dataspace
 
-git clone https://github.com/your-org/semantic-schemas
-git clone https://github.com/your-org/semantic-transformers
+git clone https://github.com/Semantic-Dataspace/semantic-schemas
+git clone https://github.com/Semantic-Dataspace/semantic-transformers
 
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
