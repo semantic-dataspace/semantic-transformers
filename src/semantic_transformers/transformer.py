@@ -232,14 +232,35 @@ class Transformer:
             parser.configure(self._input_schema)
 
     # ------------------------------------------------------------------
-    def run(self, file_path: str | Path, **overrides) -> TransformResult:
+    def run(
+        self,
+        file_path: str | Path,
+        *,
+        base: Optional[str] = None,
+        **overrides,
+    ) -> TransformResult:
         """
         Process *file_path* end-to-end.
 
-        Any keyword arguments (e.g. ``test_name``, ``specimen_iri``) are
-        merged into the parsed simplified JSON, overriding whatever the
-        parser produced.  Use this to supply values that cannot be read
-        from the file itself.
+        Parameters
+        ----------
+        file_path :
+            Path to the instrument export file.
+        base :
+            Base IRI used to resolve relative node identifiers in the
+            OO-LD document.  Overrides the ``@base`` entry in the schema
+            context.  Relative IDs such as ``tensile-test-abc`` are resolved
+            against this IRI (e.g. ``https://example.org/`` produces
+            ``https://example.org/tensile-test-abc``).
+
+            When omitted, the schema's own ``@base`` is used.  Most schema
+            contexts set ``@base`` to a namespace under ``w3id.org/pmd/co/``
+            which is intended for ontology terms, not data instances.  Pass
+            your own IRI to produce portable, globally-unique data IRIs.
+        **overrides :
+            Any additional keyword arguments (e.g. ``test_name``,
+            ``specimen_iri``) are merged into the parsed simplified JSON,
+            overriding whatever the parser produced.
 
         Returns
         -------
@@ -264,9 +285,10 @@ class Transformer:
         oold_doc = Jsonata(self._transform_src).evaluate(simplified)
 
         # ── OO-LD → RDF ───────────────────────────────────────────────
+        ctx = {**self._context, **({} if base is None else {"@base": base})}
         g = rdflib.Dataset()
         g.parse(
-            data   = json.dumps({"@context": self._context, **oold_doc}),
+            data   = json.dumps({"@context": ctx, **oold_doc}),
             format = "json-ld",
         )
 
