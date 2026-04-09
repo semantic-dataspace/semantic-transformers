@@ -32,7 +32,7 @@ def result(parser, zwick_txt):
 
 class TestSimplifiedJson:
     def test_test_name_is_file_stem(self, result):
-        assert result.simplified_json["test_name"] == "DX56_D_FZ2_WR00_43"
+        assert result.simplified_json["test_name"] == "example_tensile_test"
 
     def test_test_standard_extracted(self, result):
         assert result.simplified_json["test_standard"] == "ISO 6892-1"

@@ -111,43 +111,10 @@ print(result.dataframe.head())
 Supported file formats: CSV, TSV, Excel (.xlsx), Parquet, JSON.
 See the [QuickMapper notebook](docs/3_quickstart-mapping.ipynb) for a guided walkthrough.
 
-## Development
+## Contributing
 
-### Running the tests
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-pytest -v
-```
-
-### Refreshing notebook outputs (for documentation)
-
-Notebooks are committed with their output cells so that GitHub renders them as
-readable documentation.  After changing a parser or the library, re-execute all
-notebooks in-place to update the stored outputs before committing:
-
-```bash
-find docs -name "*.ipynb" ! -path "*/.ipynb_checkpoints/*" \
-  | xargs jupyter nbconvert \
-      --to notebook \
-      --execute \
-      --inplace \
-      --ExecutePreprocessor.timeout=300
-```
-
-Run this from the repository root.  Commit the resulting `*.ipynb` changes
-together with any code changes so that the rendered output on GitHub stays
-in sync.
-
-> **Tip.** To refresh a single notebook only, pass its path directly:
->
-> ```bash
-> jupyter nbconvert --to notebook --execute --inplace \
->     --ExecutePreprocessor.timeout=300 \
->     docs/3_quickstart-mapping.ipynb
-> ```
+To contribute or run tests locally, see [CONTRIBUTING.md](CONTRIBUTING.md) for setup
+and development workflow instructions.
 
 ## Documentation
 

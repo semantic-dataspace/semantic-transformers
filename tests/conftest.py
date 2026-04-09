@@ -30,4 +30,4 @@ for _d in _PARSER_DIRS:
 @pytest.fixture(scope="session")
 def zwick_txt():
     """Path to the sample Zwick export file bundled with the test suite."""
-    return DATA_DIR / "DX56_D_FZ2_WR00_43.TXT"
+    return DATA_DIR / "example_tensile_test.TXT"
