@@ -1,0 +1,32 @@
+[
+  {
+    "key":      "Prüfzeit",
+    "iri":      "https://w3id.org/pmd/tto/TestTime",
+    "unit_iri": "http://qudt.org/vocab/unit/SEC"
+  },
+  {
+    "key":      "Standardkraft",
+    "iri":      "https://w3id.org/pmd/tto/StandardForce",
+    "unit_iri": "http://qudt.org/vocab/unit/N"
+  },
+  {
+    "key":      "Traversenweg absolut",
+    "iri":      "https://w3id.org/pmd/tto/AbsoluteCrossheadTravel",
+    "unit_iri": "http://qudt.org/vocab/unit/MilliM"
+  },
+  {
+    "key":      "Standardweg",
+    "iri":      "https://w3id.org/pmd/tto/Extension",
+    "unit_iri": "http://qudt.org/vocab/unit/MilliM"
+  },
+  {
+    "key":      "Breitenänderung",
+    "iri":      "https://w3id.org/pmd/tto/WidthChange",
+    "unit_iri": "http://qudt.org/vocab/unit/MilliM"
+  },
+  {
+    "key":      "Dehnung",
+    "iri":      "https://w3id.org/pmd/tto/Elongation",
+    "unit_iri": "http://qudt.org/vocab/unit/MilliM"
+  }
+]

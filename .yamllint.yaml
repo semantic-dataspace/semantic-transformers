@@ -1,0 +1,53 @@
+extends: default
+
+rules:
+
+  # OO-LD schemas have long $comment blocks (multi-line scalars with >-).
+  # Allow up to 120 chars; non-breakable inline mappings are exempt.
+  line-length:
+    max: 120
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+
+  # Allow aligned spacing after colons (e.g. `foaf:  'http://...'`)
+  colons:
+    max-spaces-after: -1   # -1 = no limit, enables column-aligned @context blocks
+    max-spaces-before: 0
+
+  # Require two spaces before inline comments (e.g. `iri: 'foo'  # note`)
+  comments:
+    min-spaces-from-content: 2
+
+  # Disable block comment indentation checks.
+  # Section-divider comments inside `properties:` blocks intentionally appear
+  # at property level (2 spaces) after deeper content (4 spaces), which
+  # yamllint would otherwise flag as false positives.
+  comments-indentation: disable
+
+  # Enforce consistent indentation (2 spaces, as used across all schemas)
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+
+  # Disallow bare `yes`/`no`/`on`/`off`; use `true`/`false` explicitly.
+  # Exempts mapping keys (e.g. `readOnly: true` is fine).
+  truthy:
+    allowed-values: ['true', 'false']
+    check-keys: false
+
+  # Allow files without a leading `---` document separator
+  document-start: disable
+
+  # Allow multiple documents per file (not used currently, but harmless)
+  document-end: disable
+
+  # Quoted strings: don't enforce a specific quoting style globally.
+  # OO-LD schemas need single-quoted IRIs (e.g. '@context', '@id').
+  quoted-strings: disable
+
+  # Allow empty lines between top-level keys for readability
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 1

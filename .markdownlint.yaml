@@ -1,0 +1,31 @@
+# Markdownlint configuration
+# Reference: https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+default: true
+
+# MD013: Line length
+# Tables and code blocks are exempt; prose is capped at 120 chars.
+MD013:
+  line_length: 160        # prose descriptions can be long
+  heading_line_length: 80
+  code_block_line_length: 120
+  code_blocks: true
+  tables: false
+
+# MD033: Inline HTML
+# Allowed for tables and special formatting in docs.
+MD033: false
+
+# MD041: First line must be a top-level heading
+# Disabled because some files start with a front-matter comment block.
+MD041: false
+
+# MD024: No duplicate headings
+# Allow same heading text in different sections (e.g. "Notes" appears multiple times).
+MD024:
+  siblings_only: true
+
+# MD007: Unordered list indentation
+# Use 2-space indent for nested lists.
+MD007:
+  indent: 2
