@@ -96,7 +96,7 @@ print(result.dataframe.head())
 ```
 
 Supported file formats: CSV, TSV, Excel (.xlsx), Parquet, JSON.
-See the [QuickMapper notebook](docs/quickstart-mapping.ipynb) for a guided walkthrough.
+See the [QuickMapper notebook](docs/3_quickstart-mapping.ipynb) for a guided walkthrough.
 
 ## Development
 
@@ -133,11 +133,11 @@ in sync.
 > ```bash
 > jupyter nbconvert --to notebook --execute --inplace \
 >     --ExecutePreprocessor.timeout=300 \
->     docs/quickstart-mapping.ipynb
+>     docs/3_quickstart-mapping.ipynb
 > ```
 
 ## Documentation
 
 - [Getting started](docs/1_getting-started.md): convert your first instrument file
-- [QuickMapper walkthrough](docs/quickstart-mapping.ipynb): turn any tabular file into RDF
+- [QuickMapper walkthrough](docs/3_quickstart-mapping.ipynb): turn any tabular file into RDF
 - [Adding a parser](docs/2_adding-a-parser.md): support a new instrument or handle file variants

@@ -1,7 +1,7 @@
 """
 Transformer: parser output → OO-LD → RDF + DataFrame.
 
-Usage — shorthand (recommended)
+Usage: shorthand (recommended)
 --------------------------------
     from semantic_transformers import Transformer
     from zwick_parser import ZwickParser
@@ -19,13 +19,13 @@ Usage — shorthand (recommended)
         semantic_schema  = Path("../semantic-schemas/schemas/domain/Ontology/"),
     )
 
-Usage — explicit paths (full control / non-standard layouts)
+Usage: explicit paths (full control / non-standard layouts)
 -------------------------------------------------------------
     transformer = Transformer(
         parser       = ZwickParser(),
-        jsonata      = "simplified/transform.jsonata",
+        jsonata      = "specs/transform.simplified.jsonata",
         oold_schema  = "specs/schema.oold.yaml",
-        input_schema = "simplified/schema.simplified.json",  # optional
+        input_schema = "specs/schema.simplified.json",  # optional
     )
 
     result = transformer.run("my_file.csv")
@@ -57,9 +57,9 @@ _RDFS   = rdflib.RDFS
 _RDF    = rdflib.RDF
 
 # Standard file paths relative to a schema folder root.
-_JSONATA_REL     = "simplified/transform.jsonata"
+_JSONATA_REL     = "specs/transform.simplified.jsonata"
 _OOLD_SCHEMA_REL = "specs/schema.oold.yaml"
-_INPUT_SCHEMA_REL = "simplified/schema.simplified.json"
+_INPUT_SCHEMA_REL = "specs/schema.simplified.json"
 
 
 def _read_text(source: str | Path) -> str:
@@ -122,7 +122,7 @@ class TransformResult:
     oold_doc: dict
 
     # Raw measurement data.  None when the file had no tabular section.
-    dataframe: object  # pd.DataFrame | None — avoid importing pandas at module level
+    dataframe: object  # pd.DataFrame | None (avoid importing pandas at module level)
 
     # Column name → ontology class IRI (same as ParseResult.column_iris).
     column_iris: dict[str, str]
@@ -142,26 +142,26 @@ class Transformer:
         Any object implementing the Parser protocol.
 
     semantic_schema:
-        Shorthand: the root folder of the schema — either a local ``Path``
+        Shorthand: the root folder of the schema, either a local ``Path``
         or a GitHub ``tree/`` URL.  Derives all three file paths using the
         standard schema folder layout.  Any explicitly provided ``jsonata``,
         ``oold_schema``, or ``input_schema`` value takes precedence over the
         derived path.
 
     jsonata:
-        Path or URL to the schema's ``simplified/transform.jsonata`` file.
+        Path or URL to the schema's ``specs/transform.simplified.jsonata`` file.
 
     oold_schema:
         Path or URL to the schema's ``specs/schema.oold.yaml`` file (contains
         the JSON-LD ``@context`` used to convert OO-LD output to RDF).
 
     input_schema:
-        Optional path or URL to the schema's ``simplified/schema.simplified.json``
+        Optional path or URL to the schema's ``specs/schema.simplified.json``
         file.  When provided, the parser's output (after caller overrides) is
         validated for type correctness before being passed to the JSONata
         transform.  Catches field-name mismatches between a parser and its
         target schema early.  Required-field completeness is intentionally not
-        enforced here — SHACL validation handles that downstream.
+        enforced here; SHACL validation handles that downstream.
 
     Examples
     --------
@@ -183,9 +183,9 @@ class Transformer:
 
         transformer = Transformer(
             parser       = ZwickParser(),
-            jsonata      = "simplified/transform.jsonata",
+            jsonata      = "specs/transform.simplified.jsonata",
             oold_schema  = "specs/schema.oold.yaml",
-            input_schema = "simplified/schema.simplified.json",
+            input_schema = "specs/schema.simplified.json",
         )
     """
 
@@ -316,7 +316,7 @@ class Transformer:
     ) -> None:
         """
         Add a dcat:Dataset node for the time series and one descriptor node
-        per column.  Only IRIs and units go into the graph — not the values.
+        per column.  Only IRIs and units go into the graph (not the values).
 
         Graph pattern added
         -------------------

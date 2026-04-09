@@ -1,7 +1,7 @@
 """
 Tests for QuickMapper.
 
-Uses only in-memory DataFrames and tmp_path fixtures — no external files
+Uses only in-memory DataFrames and tmp_path fixtures - no external files
 and no dependency on semantic-schemas.
 """
 import importlib.util
@@ -9,6 +9,10 @@ import json
 from pathlib import Path
 
 _has_openpyxl = importlib.util.find_spec("openpyxl") is not None
+_has_parquet  = (
+    importlib.util.find_spec("pyarrow") is not None
+    or importlib.util.find_spec("fastparquet") is not None
+)
 
 import pandas as pd
 import pytest
@@ -60,7 +64,7 @@ def _write_excel(tmp_path, df, name="data.xlsx") -> Path:
 
 
 def _write_txt_tsv(tmp_path, df, name="data.txt") -> Path:
-    """Tab-separated with .txt extension — exercises the sniffer."""
+    """Tab-separated with .txt extension - exercises the sniffer."""
     p = tmp_path / name
     df.to_csv(p, index=False, sep="\t")
     return p
@@ -116,6 +120,7 @@ class TestFileFormats:
         result = QuickMapper(_MINIMAL_MAPPING).run(_write_excel(tmp_path, _SAMPLE_DF))
         assert len(result.dataframe) == 3
 
+    @pytest.mark.skipif(not _has_parquet, reason="pyarrow or fastparquet not installed")
     def test_parquet(self, tmp_path):
         p = tmp_path / "data.parquet"
         _SAMPLE_DF.to_parquet(p, index=False)

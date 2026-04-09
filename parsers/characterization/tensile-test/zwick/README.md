@@ -8,7 +8,7 @@ a `Transformer`.
 
 | Schema | Version | Files used |
 |---|---|---|
-| `characterization/tensile-test/TTO` | 1.0.0 | `simplified/transform.jsonata`, `specs/schema.oold.yaml`, `specs/shape.ttl` |
+| `characterization/tensile-test/TTO` | 1.0.0 | `specs/transform.simplified.jsonata`, `specs/schema.oold.yaml`, `specs/shape.ttl` |
 
 Update the version here whenever you re-test against a newer schema release.
 

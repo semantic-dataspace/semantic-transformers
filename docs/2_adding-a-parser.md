@@ -95,7 +95,7 @@ parsers/characterization/tensile-test/zwick/ ← parser
 
 Decide which schema in `semantic-schemas` this parser feeds into. The
 simplified JSON your parser produces must match the fields in that schema's
-`simplified/schema.simplified.json`.
+`specs/schema.simplified.json`.
 
 ### Step 2: create the folder
 
@@ -135,7 +135,7 @@ class MyParser:
 Rules:
 
 - `simplified_json` must use field names from the target schema's
-  `simplified/schema.simplified.json`. Unknown keys are ignored by the
+  `specs/schema.simplified.json`. Unknown keys are ignored by the
   JSONata transform.
 - `timeseries` is optional. Pass `None` if the file has no tabular data.
 - `column_iris` and `column_units` are optional.
@@ -163,7 +163,7 @@ class MyParser(SchemaAwareParser):
 ```
 
 `Transformer` detects `SchemaAwareParser` via `isinstance` and calls
-`configure(schema)` at construction time — before the first `run()` call.
+`configure(schema)` at construction time, before the first `run()` call.
 The user sees none of this; they just write
 `Transformer(parser=MyParser(), semantic_schema=...)` as normal.
 

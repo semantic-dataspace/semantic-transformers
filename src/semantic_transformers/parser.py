@@ -4,17 +4,17 @@ Parser protocol and result type.
 A Parser reads a machine file (any format, any internal structure) and
 returns a ParseResult with two outputs:
 
-  simplified_json   — a plain dict matching the target schema's example.input.json
-                      format, ready to be fed into the JSONata transform.
+  simplified_json:  a plain dict matching the target schema's example.input.json
+                    format, ready to be fed into the JSONata transform.
 
-  timeseries        — a pandas DataFrame of the raw measurement columns, or None
-                      if the file contains no time-series data.
+  timeseries:       a pandas DataFrame of the raw measurement columns, or None
+                    if the file contains no time-series data.
 
-  column_iris       — maps each DataFrame column name to an ontology class IRI.
-                      Only the descriptor goes into the knowledge graph; the
-                      numeric values stay in the DataFrame.
+  column_iris:      maps each DataFrame column name to an ontology class IRI.
+                    Only the descriptor goes into the knowledge graph; the
+                    numeric values stay in the DataFrame.
 
-  column_units      — maps each DataFrame column name to a QUDT unit IRI.
+  column_units:     maps each DataFrame column name to a QUDT unit IRI.
 
 Parsers are schema- and machine-specific: one parser per (machine model,
 schema) combination.  They live in the parsers/ directory alongside the

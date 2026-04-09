@@ -1,7 +1,7 @@
 """
 Tests for the Zwick/Roell parser.
 
-Pure unit tests — no schema files, no Transformer, no RDF.
+Pure unit tests - no schema files, no Transformer, no RDF.
 The conftest session fixture puts the parser directory on sys.path.
 """
 import json

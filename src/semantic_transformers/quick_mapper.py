@@ -16,10 +16,10 @@ Supported file formats
 
 Mapping config format
 ---------------------
-    # root_type is optional — defaults to dcat:Dataset
+    # root_type is optional (defaults to dcat:Dataset)
     root_type: "http://www.w3.org/ns/dcat#Dataset"
 
-    # label is optional — defaults to the file stem
+    # label is optional (defaults to the file stem)
     label: "Hardness profile, sample 42"
 
     # file reading options (all optional)
@@ -107,7 +107,7 @@ class QuickMapper:
         Returns
         -------
         TransformResult
-            Same type as :meth:`Transformer.run` — graph, oold_doc, dataframe,
+            Same type as :meth:`Transformer.run`: graph, oold_doc, dataframe,
             column_iris, column_units.
         """
         path   = Path(file_path)

@@ -160,7 +160,7 @@ file:
 ```
 
 For a guided walkthrough open the
-[QuickMapper notebook](quickstart-mapping.ipynb).
+[QuickMapper notebook](3_quickstart-mapping.ipynb).
 
 ---
 

@@ -53,5 +53,5 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = [
-    "ignore::DeprecationWarning:rdflib",
+    "ignore::DeprecationWarning:rdflib.*",
 ]

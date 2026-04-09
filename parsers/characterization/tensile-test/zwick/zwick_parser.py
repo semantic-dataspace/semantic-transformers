@@ -30,7 +30,7 @@ The parser then reads the ``type`` for each field and casts accordingly
 (``"number"`` / ``"integer"`` → float/int, ``"string"`` → str).
 
 This means adding a new numeric or string field to the schema requires no code
-change in the parser — only a new entry in meta_field_map.  No schema path
+change in the parser; only a new entry in meta_field_map is needed.  No schema path
 needs to be passed to the parser directly.
 
 Adapting to file variants
@@ -79,7 +79,7 @@ _DEFAULT_METADATA_ROWS = 20
 #
 # Keys are the German metadata labels as exported by Zwick software.
 # Values are field names defined in schema.simplified.json.
-# Adding a new field to the schema only requires a new entry here — no other
+# Adding a new field to the schema only requires a new entry here; no other
 # code changes are needed; the Transformer shares the loaded schema via
 # configure() so types are always read from the current schema version.
 _DEFAULT_META_FIELD_MAP: dict[str, str] = {
@@ -98,7 +98,7 @@ class ZwickParser(SchemaAwareParser):
     compatible with the ``characterization/tensile-test/TTO`` schema.
 
     When used with ``Transformer``, the Transformer automatically calls
-    ``configure(schema)`` to share the loaded input schema — no schema path
+    ``configure(schema)`` to share the loaded input schema; no schema path
     needs to be passed to this parser directly.
 
     Parameters
@@ -166,9 +166,9 @@ class ZwickParser(SchemaAwareParser):
 
         Supported config keys (all optional)
         -------------------------------------
-        metadata_rows:     int  — rows before the column-header row
-        strain_rate_label: str | null
-        meta_field_map:    dict — label → field_name
+        metadata_rows (int):     rows before the column-header row
+        strain_rate_label (str): set to null to disable
+        meta_field_map (dict):   label → field_name
 
         Example
         -------
@@ -194,13 +194,8 @@ class ZwickParser(SchemaAwareParser):
     # ------------------------------------------------------------------
 
     def parse(self, path: Path) -> ParseResult:
-        rows = list(
-            csv.reader(
-                path.open(encoding="utf-8"),
-                delimiter = "\t",
-                quotechar = '"',
-            )
-        )
+        with path.open(encoding="utf-8") as fh:
+            rows = list(csv.reader(fh, delimiter="\t", quotechar='"'))
 
         meta_raw   = self._parse_metadata(rows)
         simplified = self._build_simplified_json(meta_raw, path)
