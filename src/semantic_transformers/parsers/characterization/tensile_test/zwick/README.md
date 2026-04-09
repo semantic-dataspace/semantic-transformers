@@ -38,10 +38,7 @@ Mapped metadata fields:
 ## Quick start
 
 ```python
-import sys
-sys.path.insert(0, '/path/to/semantic-transformers/parsers/characterization/tensile-test/zwick')
-
-from zwick_parser import ZwickParser
+from semantic_transformers.parsers.characterization.tensile_test.zwick import ZwickParser
 from semantic_transformers import Transformer
 
 transformer = Transformer(

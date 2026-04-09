@@ -31,7 +31,7 @@ meta_field_map:
 ```
 
 ```python
-from zwick_parser import ZwickParser
+from semantic_transformers.parsers.characterization.tensile_test.zwick import ZwickParser
 from semantic_transformers import Transformer
 
 transformer = Transformer(
@@ -77,18 +77,19 @@ repository.
 ### Folder structure
 
 ```text
-parsers/<domain>/<specialisation>/<machine>/
+src/semantic_transformers/parsers/<domain>/<specialisation>/<machine>/
   <machine>_parser.py  Reads the instrument file → ParseResult
   column_mapping.json  Maps column names to ontology IRIs and QUDT units
   README.md            Quick-start, schema compatibility, and known limitations
 ```
 
 The folder path mirrors the `schemas/` tree in `semantic-schemas`, but
-without the ontology subfolder. For example:
+without the ontology subfolder. Directory names must use underscores (not
+hyphens) to be valid Python identifiers. For example:
 
 ```text
-schemas/characterization/tensile-test/TTO/   ← schema
-parsers/characterization/tensile-test/zwick/ ← parser
+schemas/characterization/tensile-test/TTO/                                  ← schema
+src/semantic_transformers/parsers/characterization/tensile_test/zwick/      ← parser
 ```
 
 ### Step 1: choose the target schema
@@ -100,7 +101,7 @@ simplified JSON your parser produces must match the fields in that schema's
 ### Step 2: create the folder
 
 ```bash
-mkdir -p parsers/<domain>/<specialisation>/<machine>/
+mkdir -p src/semantic_transformers/parsers/<domain>/<specialisation>/<machine>/
 ```
 
 ### Step 3: write the parser
@@ -108,8 +109,8 @@ mkdir -p parsers/<domain>/<specialisation>/<machine>/
 Copy the Zwick parser as a starting point:
 
 ```bash
-cp parsers/characterization/tensile-test/zwick/zwick_parser.py \
-   parsers/<domain>/<specialisation>/<machine>/<machine>_parser.py
+cp src/semantic_transformers/parsers/characterization/tensile_test/zwick/zwick_parser.py \
+   src/semantic_transformers/parsers/<domain>/<specialisation>/<machine>/<machine>_parser.py
 ```
 
 Open the copy and adjust `_parse_metadata()` and `_parse_timeseries()` for
@@ -197,10 +198,7 @@ Include these sections (use the Zwick README as a template):
 ### Step 6: test end-to-end
 
 ```python
-import sys
-sys.path.insert(0, 'parsers/<domain>/<specialisation>/<machine>')
-
-from <machine>_parser import MyParser
+from semantic_transformers.parsers.<domain>.<specialisation>.<machine> import MyParser
 from semantic_transformers import Transformer
 
 transformer = Transformer(

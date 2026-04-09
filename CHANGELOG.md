@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-04-09
+
+### Fixed
+
+- Moved `parsers/` from repo root into `src/semantic_transformers/parsers/` so
+  parsers are included in the wheel and importable after a regular `pip install`
+- Renamed `tensile-test/` to `tensile_test/` throughout to produce valid Python
+  package identifiers
+- Removed the `importlib`-based shim in `src/semantic_transformers/parsers/`
+  that only worked with editable installs
+- Only `*.json` data files (column mappings) are shipped in the wheel; parser
+  `README.md` files are excluded via `package-data`
+- Removed duplicate `example_tensile_test.TXT` from the parser folder
+  (canonical copy is in `tests/data/`)
+- Cleaned up test imports to use the proper package path instead of
+  `sys.path` manipulation
+
 ## [0.1.2] - 2026-04-09
 
 ### Added

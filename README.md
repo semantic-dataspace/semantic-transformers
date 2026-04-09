@@ -8,13 +8,13 @@ files and the [semantic-schemas](../semantic-schemas/) knowledge graph pipeline.
 ```text
 semantic-transformers/
   src/semantic_transformers/   Python library (Transformer, QuickMapper, …)
-  parsers/                     Machine-specific file parsers
-    <domain>/                  Mirrors the semantic-schemas folder structure
-      <specialisation>/
-        <machine>/             One folder per instrument model
-          <machine>_parser.py  Reads the instrument file
-          column_mapping.json  Maps column names to ontology class IRIs and units
-          README.md            Quick-start, schema compatibility, and known limitations
+    parsers/                   Machine-specific file parsers
+      <domain>/                Mirrors the semantic-schemas folder structure
+        <specialisation>/
+          <machine>/           One folder per instrument model
+            <machine>_parser.py  Reads the instrument file
+            column_mapping.json  Maps column names to ontology class IRIs and units
+            README.md            Quick-start, schema compatibility, and known limitations
   docs/                        Guides for users and contributors
 ```
 
@@ -30,14 +30,14 @@ semantic-transformers/
 | `TransformResult` | What `Transformer.run()` returns: RDF graph + DataFrame |
 | `QuickMapper` | Turns any tabular file into RDF using a simple YAML mapping (no parser needed) |
 
-### 2. The parsers (`parsers/`)
+### 2. The parsers (`src/semantic_transformers/parsers/`)
 
 Each parser targets a specific instrument model. The folder path mirrors the
 `schemas/` tree in `semantic-schemas`:
 
-| Schema | Instrument | Parser path |
+| Schema | Instrument | Import path |
 |---|---|---|
-| `characterization/tensile-test/TTO` | Zwick/Roell (testXpert III) | `parsers/characterization/tensile-test/zwick/` |
+| `characterization/tensile-test/TTO` | Zwick/Roell (testXpert III) | `semantic_transformers.parsers.characterization.tensile_test.zwick` |
 
 ## Installation
 

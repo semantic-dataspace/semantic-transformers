@@ -2,14 +2,13 @@
 Tests for the Zwick/Roell parser.
 
 Pure unit tests - no schema files, no Transformer, no RDF.
-The conftest session fixture puts the parser directory on sys.path.
 """
 import json
 from pathlib import Path
 
 import pytest
 
-from zwick_parser import ZwickParser
+from semantic_transformers.parsers.characterization.tensile_test.zwick import ZwickParser
 
 
 # ---------------------------------------------------------------------------
