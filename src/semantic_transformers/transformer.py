@@ -21,7 +21,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
+import jsonschema
 import rdflib
 import yaml
 from jsonata.jsonata import Jsonata
@@ -69,6 +71,14 @@ class Transformer:
         Path to the schema's ``simplified/transform.jsonata`` file.
     context:
         Path to the schema's ``specs/schema.oold.yaml`` file.
+    simplified_schema:
+        Optional path to the schema's ``simplified/schema.simplified.json``
+        file.  When provided, the simplified JSON produced by the extractor
+        (after applying any caller overrides) is validated against this
+        schema before being passed to the JSONata transform.  Validation
+        failures raise ``jsonschema.ValidationError``.  This is the
+        recommended way to catch field-name mismatches between an extractor
+        and the schema it targets.
     """
 
     def __init__(
@@ -76,6 +86,7 @@ class Transformer:
         extractor: Extractor,
         transform: str | Path,
         context: str | Path,
+        simplified_schema: Optional[str | Path] = None,
     ) -> None:
         self.extractor      = extractor
         self._transform_src = Path(transform).read_text(encoding="utf-8")
@@ -83,6 +94,11 @@ class Transformer:
         self._context       = raw["@context"]
         # Derive the IRI base so we can construct timeseries node IRIs.
         self._base          = self._context.get("@base", "")
+        self._simplified_schema: dict | None = (
+            json.loads(Path(simplified_schema).read_text(encoding="utf-8"))
+            if simplified_schema is not None
+            else None
+        )
 
     # ------------------------------------------------------------------
     def run(self, file_path: str | Path, **overrides) -> TransformResult:
@@ -102,6 +118,16 @@ class Transformer:
 
         # Merge: extractor output first, then caller overrides.
         simplified = {**extraction.simplified_json, **overrides}
+
+        # ── Validate against simplified schema (if provided) ──────────
+        # Strip 'required' before validating: fields that cannot be extracted
+        # from the file (e.g. specimen_iri, which must be supplied by the
+        # caller) are legitimately absent here.  The goal is to catch type
+        # mismatches and unknown field names, not to enforce completeness —
+        # SHACL validation downstream will flag any missing required triples.
+        if self._simplified_schema is not None:
+            schema_for_validation = {**self._simplified_schema, "required": []}
+            jsonschema.validate(instance=simplified, schema=schema_for_validation)
 
         # ── JSONata transform ──────────────────────────────────────────
         oold_doc = Jsonata(self._transform_src).evaluate(simplified)

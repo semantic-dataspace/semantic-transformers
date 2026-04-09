@@ -21,6 +21,19 @@ Produces an ExtractionResult where:
   column_iris      maps each column to its TTO class IRI  (from column_mapping.json)
   column_units     maps each column to its QUDT unit IRI  (from column_mapping.json)
 
+Schema-driven type coercion
+---------------------------
+Pass the path to ``simplified/schema.simplified.json`` so that field types are
+read from the schema rather than hard-coded in the extractor:
+
+    ZwickExtractor(simplified_schema_path="path/to/schema.simplified.json")
+
+When provided, the extractor reads the ``type`` for each field from the JSON
+Schema and casts accordingly (``"number"`` / ``"integer"`` → float/int,
+``"string"`` → str).  This means adding a new numeric or string field to the
+schema requires no code change in the extractor — only a new entry in
+``meta_field_map`` mapping the CSV label to the new field name.
+
 Adapting to file variants
 -------------------------
 If your Zwick software version or machine template produces a different number
@@ -31,11 +44,12 @@ point the extractor at a YAML config file instead of changing Python code:
 
 The config file supports these keys (all optional):
 
+    simplified_schema_path: path/to/schema.simplified.json
     metadata_rows: 15               # rows before the column-header row
     strain_rate_label: null         # set to null to skip
     meta_field_map:
-      Temperature: [temperature, float]
-      Norm:        [test_standard, str]
+      Temperature: temperature
+      Norm:        test_standard
 
 Alternatively, pass the same values directly as keyword arguments:
 
@@ -62,14 +76,17 @@ from semantic_transformers import ExtractionResult
 # Default number of leading rows that are metadata before the column-header row.
 _DEFAULT_METADATA_ROWS = 20
 
-# Default mapping of metadata labels to (simplified_json_field, dtype).
-# Only fields that have a direct equivalent in the TTO simplified schema are
-# listed here.  All other metadata fields are ignored for the RDF pipeline
-# (they remain readable in the raw file).
-_DEFAULT_META_FIELD_MAP: dict[str, tuple[str, str]] = {
-    "Prüfnorm":            ("test_standard",   "str"),
-    "Temperatur":          ("temperature",     "float"),
-    "Prüfgeschwindigkeit": ("strain_rate",     "float"),
+# Default mapping of metadata labels to simplified JSON field names.
+#
+# Keys are the German metadata labels as exported by Zwick software.
+# Values are field names defined in schema.simplified.json.
+# Adding a new field to the schema only requires a new entry here — no other
+# code changes are needed, provided simplified_schema_path is passed so that
+# the correct type is read from the schema.
+_DEFAULT_META_FIELD_MAP: dict[str, str] = {
+    "Prüfnorm":            "test_standard",
+    "Temperatur":          "temperature",
+    "Prüfgeschwindigkeit": "strain_rate",
 }
 
 # Label whose *unit* column is used as the strain_rate_unit.
@@ -86,15 +103,21 @@ class ZwickExtractor:
     column_mapping_path:
         Path to the ``column_mapping.json`` file that lives next to this
         extractor.  Pass ``None`` to use the default file next to this module.
+    simplified_schema_path:
+        Path to ``simplified/schema.simplified.json``.  When provided, field
+        types (``"number"``, ``"string"``, etc.) are read from the schema and
+        used for type coercion instead of being inferred heuristically.
+        Recommended: always pass this so the extractor stays in sync with the
+        schema without requiring code changes when new fields are added.
     metadata_rows:
         Number of leading rows that form the metadata block before the
         column-header row.  Default: 20.  Adjust for software versions or
         machine variants that produce a shorter or longer header block.
     meta_field_map:
-        Mapping of metadata label strings to ``(simplified_json_field, dtype)``
-        tuples.  Overrides the default German-label map when provided.  Useful
-        when the exported labels differ (e.g. localised to another language or
-        a custom template).
+        Mapping of metadata label strings to simplified JSON field names.
+        Overrides the default German-label map when provided.  Useful when the
+        exported labels differ (e.g. localised to another language or a custom
+        template).
     strain_rate_label:
         The metadata label whose unit column is carried into the simplified
         JSON as ``strain_rate_unit``.  Default: ``"Prüfgeschwindigkeit"``.
@@ -104,9 +127,10 @@ class ZwickExtractor:
     def __init__(
         self,
         column_mapping_path: Optional[Path] = None,
+        simplified_schema_path: Optional[Path] = None,
         *,
         metadata_rows: int = _DEFAULT_METADATA_ROWS,
-        meta_field_map: Optional[dict[str, tuple[str, str]]] = None,
+        meta_field_map: Optional[dict[str, str]] = None,
         strain_rate_label: Optional[str] = _STRAIN_RATE_LABEL,
     ) -> None:
         if column_mapping_path is None:
@@ -116,9 +140,19 @@ class ZwickExtractor:
         self._col_iris:  dict[str, str] = {m["key"]: m["iri"]      for m in mapping}
         self._col_units: dict[str, str] = {m["key"]: m["unit_iri"] for m in mapping}
 
-        self._metadata_rows    = metadata_rows
-        self._meta_field_map   = meta_field_map if meta_field_map is not None else _DEFAULT_META_FIELD_MAP
+        self._metadata_rows     = metadata_rows
+        self._meta_field_map    = meta_field_map if meta_field_map is not None else _DEFAULT_META_FIELD_MAP
         self._strain_rate_label = strain_rate_label
+
+        # Load field types from schema.simplified.json so type coercion is
+        # schema-driven rather than hard-coded.
+        self._field_types: dict[str, str] = {}
+        if simplified_schema_path is not None:
+            schema = json.loads(Path(simplified_schema_path).read_text(encoding="utf-8"))
+            self._field_types = {
+                name: prop.get("type", "string")
+                for name, prop in schema.get("properties", {}).items()
+            }
 
     # ------------------------------------------------------------------
 
@@ -133,29 +167,37 @@ class ZwickExtractor:
 
         Supported config keys (all optional)
         -------------------------------------
-        metadata_rows:    int   — rows before the column-header row
-        strain_rate_label: str | null
-        meta_field_map:   dict  — label → [json_field, dtype]
+        simplified_schema_path: str  — path to schema.simplified.json
+        metadata_rows:          int  — rows before the column-header row
+        strain_rate_label:      str | null
+        meta_field_map:         dict — label → field_name
 
         Example
         -------
+        simplified_schema_path: ../../simplified/schema.simplified.json
         metadata_rows: 15
         strain_rate_label: null
         meta_field_map:
-          Temperature: [temperature, float]
-          Norm: [test_standard, str]
+          Temperature: temperature
+          Norm: test_standard
         """
         cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8")) or {}
 
         meta_field_map = None
         if "meta_field_map" in cfg:
-            meta_field_map = {k: tuple(v) for k, v in cfg["meta_field_map"].items()}
+            meta_field_map = dict(cfg["meta_field_map"])
+
+        simplified_schema_path = None
+        if "simplified_schema_path" in cfg:
+            # Resolve relative to the config file's directory.
+            simplified_schema_path = Path(config_path).parent / cfg["simplified_schema_path"]
 
         return cls(
-            column_mapping_path = column_mapping_path,
-            metadata_rows       = cfg.get("metadata_rows", _DEFAULT_METADATA_ROWS),
-            meta_field_map      = meta_field_map,
-            strain_rate_label   = cfg.get("strain_rate_label", _STRAIN_RATE_LABEL),
+            column_mapping_path     = column_mapping_path,
+            simplified_schema_path  = simplified_schema_path,
+            metadata_rows           = cfg.get("metadata_rows", _DEFAULT_METADATA_ROWS),
+            meta_field_map          = meta_field_map,
+            strain_rate_label       = cfg.get("strain_rate_label", _STRAIN_RATE_LABEL),
         )
 
     # ------------------------------------------------------------------
@@ -199,6 +241,26 @@ class ZwickExtractor:
             result[label] = (value, unit)
         return result
 
+    def _cast(self, value_str: str, field_name: str) -> str | float | int:
+        """
+        Cast *value_str* to the type declared for *field_name* in the
+        simplified schema.  Falls back to a heuristic (float if parseable,
+        otherwise str) when no schema was provided or the field is not listed.
+        """
+        field_type = self._field_types.get(field_name, "")
+        if field_type in ("number", "integer"):
+            try:
+                return int(value_str) if field_type == "integer" else float(value_str)
+            except ValueError:
+                return value_str
+        if field_type == "string":
+            return value_str
+        # No schema: try float, fall back to str.
+        try:
+            return float(value_str)
+        except ValueError:
+            return value_str
+
     def _build_simplified_json(
         self,
         meta: dict[str, tuple[str, str]],
@@ -209,19 +271,13 @@ class ZwickExtractor:
         # Derive test_name from the file stem (user can override via transformer.run).
         simplified["test_name"] = path.stem
 
-        for csv_label, (json_field, dtype) in self._meta_field_map.items():
+        for csv_label, json_field in self._meta_field_map.items():
             if csv_label not in meta:
                 continue
-            value_str, unit_str = meta[csv_label]
+            value_str, _unit_str = meta[csv_label]
             if not value_str:
                 continue
-            if dtype == "float":
-                try:
-                    simplified[json_field] = float(value_str)
-                except ValueError:
-                    pass
-            else:
-                simplified[json_field] = value_str
+            simplified[json_field] = self._cast(value_str, json_field)
 
         # Carry the testing-rate unit separately so the transform can use it.
         if self._strain_rate_label and self._strain_rate_label in meta:

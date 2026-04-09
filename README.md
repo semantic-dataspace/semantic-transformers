@@ -98,8 +98,46 @@ print(result.dataframe.head())
 Supported file formats: CSV, TSV, Excel (.xlsx), Parquet, JSON.
 See the [QuickMapper notebook](docs/quickstart-mapping.ipynb) for a guided walkthrough.
 
+## Development
+
+### Running the tests
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+pytest -v
+```
+
+### Refreshing notebook outputs (for documentation)
+
+Notebooks are committed with their output cells so that GitHub renders them as
+readable documentation.  After changing a parser or the library, re-execute all
+notebooks in-place to update the stored outputs before committing:
+
+```bash
+find docs -name "*.ipynb" ! -path "*/.ipynb_checkpoints/*" \
+  | xargs jupyter nbconvert \
+      --to notebook \
+      --execute \
+      --inplace \
+      --ExecutePreprocessor.timeout=300
+```
+
+Run this from the repository root.  Commit the resulting `*.ipynb` changes
+together with any code changes so that the rendered output on GitHub stays
+in sync.
+
+> **Tip.** To refresh a single notebook only, pass its path directly:
+>
+> ```bash
+> jupyter nbconvert --to notebook --execute --inplace \
+>     --ExecutePreprocessor.timeout=300 \
+>     docs/quickstart-mapping.ipynb
+> ```
+
 ## Documentation
 
-- [Getting started](docs/getting-started.md): convert your first instrument file
+- [Getting started](docs/1_getting-started.md): convert your first instrument file
 - [QuickMapper walkthrough](docs/quickstart-mapping.ipynb): turn any tabular file into RDF
-- [Adding a parser](docs/adding-a-parser.md): support a new instrument or handle file variants
+- [Adding a parser](docs/2_adding-a-parser.md): support a new instrument or handle file variants

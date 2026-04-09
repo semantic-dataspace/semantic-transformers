@@ -132,7 +132,7 @@ def test_custom_metadata_rows(zwick_txt):
 def test_custom_meta_field_map(zwick_txt):
     """A custom field map with an unknown label yields no fields from it."""
     result = ZwickExtractor(
-        meta_field_map={"NonExistentLabel": ("my_field", "str")},
+        meta_field_map={"NonExistentLabel": "my_field"},
         strain_rate_label=None,
     ).extract(zwick_txt)
     assert "my_field" not in result.simplified_json
@@ -145,6 +145,53 @@ def test_strain_rate_label_none(zwick_txt):
     assert "strain_rate_unit" not in result.simplified_json
 
 
+def test_simplified_schema_drives_type_coercion(tmp_path, zwick_txt):
+    """When simplified_schema_path is given, field types come from the schema.
+
+    Declare temperature as "string" so the extractor must return a str even
+    though the raw value ("22.0") would normally be cast to float by the
+    heuristic fallback.
+    """
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "test_standard": {"type": "string"},
+            "temperature":   {"type": "string"},   # intentionally wrong type
+            "strain_rate":   {"type": "number"},
+        },
+    }
+    schema_file = tmp_path / "schema.simplified.json"
+    schema_file.write_text(json.dumps(schema), encoding="utf-8")
+
+    result = ZwickExtractor(simplified_schema_path=schema_file).extract(zwick_txt)
+
+    # temperature declared as string → raw value kept as str, not cast to float
+    assert isinstance(result.simplified_json["temperature"], str)
+    # strain_rate declared as number → still cast to float
+    assert isinstance(result.simplified_json["strain_rate"], float)
+    # test_standard is always a string; declaration matches reality
+    assert isinstance(result.simplified_json["test_standard"], str)
+
+
+def test_simplified_schema_number_field(tmp_path, zwick_txt):
+    """When the schema declares a field as "number", the value is a float."""
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "temperature": {"type": "number"},
+        },
+    }
+    schema_file = tmp_path / "schema.simplified.json"
+    schema_file.write_text(json.dumps(schema), encoding="utf-8")
+
+    result = ZwickExtractor(simplified_schema_path=schema_file).extract(zwick_txt)
+
+    assert isinstance(result.simplified_json["temperature"], float)
+    assert result.simplified_json["temperature"] == pytest.approx(22.0)
+
+
 def test_from_config(tmp_path, zwick_txt):
     """from_config() loads layout settings from a YAML file."""
     config = tmp_path / "parser_config.yaml"
@@ -152,7 +199,7 @@ def test_from_config(tmp_path, zwick_txt):
         "metadata_rows: 20\n"
         "strain_rate_label: null\n"
         "meta_field_map:\n"
-        "  Prüfnorm: [test_standard, str]\n",
+        "  Prüfnorm: test_standard\n",
         encoding="utf-8",
     )
     result = ZwickExtractor.from_config(config).extract(zwick_txt)

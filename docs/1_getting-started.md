@@ -170,4 +170,4 @@ For a guided walkthrough open the
 |---|---|---|
 | `characterization/tensile-test/TTO` | Zwick/Roell (testXpert III) | `.TXT` tab-separated, UTF-8 |
 
-To add a parser for a new instrument, see [adding-a-parser.md](adding-a-parser.md).
+To add a parser for a new instrument, see [2_adding-a-parser.md](2_adding-a-parser.md).
