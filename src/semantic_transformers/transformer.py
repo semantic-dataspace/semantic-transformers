@@ -130,6 +130,24 @@ class TransformResult:
     # Column name → QUDT unit IRI (same as ParseResult.column_units).
     column_units: dict[str, str]
 
+    @property
+    def flat_graph(self) -> rdflib.Graph:
+        """
+        Return a flat rdflib.Graph with all triples and namespace bindings
+        from the internal Dataset.
+
+        The Dataset is the internal representation; most downstream operations
+        (serialisation, SPARQL, SHACL) work on a plain Graph.  Namespace
+        bindings are copied so that prefixes defined in the schema @context
+        (e.g. pmdco, tto, qudt) appear in serialised TTL output.
+        """
+        g = rdflib.Graph()
+        for s, p, o, _ in self.graph.quads():
+            g.add((s, p, o))
+        for prefix, ns in self.graph.namespaces():
+            g.bind(prefix, ns)
+        return g
+
 
 class Transformer:
     """

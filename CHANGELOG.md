@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-04-10
+
+### Added (`ZwickParser`)
+
+- `gauge_length` / `gauge_length_unit` — `Messlänge Standardweg` metadata row
+  now parsed and emitted as a `pmdco:PMD_0000013` process condition.
+- `preload` / `preload_unit` — `Vorkraft` metadata row parsed as a pre-load condition.
+- `test_date` — `Datum/Uhrzeit` Excel serial-number date auto-converted to an
+  ISO 8601 datetime string via the new `_excel_serial_to_iso()` helper.
+- `unit_field_map` parameter — generalises unit-column extraction for any
+  metadata label; replaces the hardcoded `strain_rate_label` mechanism.
+  `strain_rate_label` is retained for backwards compatibility but is deprecated.
+
+### Added (`TransformResult`)
+
+- `flat_graph` property — returns a `rdflib.Graph` with all triples and namespace
+  bindings propagated from the internal `Dataset`. Replaces the repetitive
+  `for s, p, o, _ in result.graph.quads(): flat.add(...)` pattern in notebooks.
+
+### Changed
+
+- Namespace bindings in serialised TTL output (`pmdco`, `tto`, `obo`, `qudt`, …)
+  are now derived from the schema `@context` and rdflib's built-in namespace
+  manager rather than being hard-coded in Python. Adding a prefix to the schema
+  YAML is sufficient; no library changes are needed.
+
+### Schema compatibility
+
+- `ZwickParser` is now compatible with `characterization/tensile-test/TTO` **v1.1.0**.
+  Remains backwards-compatible with v1.0.0 files (all new fields are optional).
+
 ## [0.1.4] - 2026-04-09
 
 ### Added

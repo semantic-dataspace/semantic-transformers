@@ -1,0 +1,3 @@
+# Exclude parser documentation from source distributions.
+# Runtime data (*.json column mappings) are declared in pyproject.toml package-data.
+recursive-exclude src/semantic_transformers/parsers *.md

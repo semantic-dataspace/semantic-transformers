@@ -172,6 +172,12 @@ Add an entry under a new section (e.g., `## [Unreleased]`) describing your chang
 
 When the package is released, `[Unreleased]` becomes the new version number.
 
+If your change affects schema compatibility (new fields mapped, new schema version
+tested), also update the parser's own `CHANGELOG.md` — the compact compatibility
+table inside the parser folder (e.g. `parsers/characterization/tensile_test/zwick/CHANGELOG.md`).
+This is separate from the package-level changelog and records only which parser
+version was tested against which schema version.
+
 ### 8. Open a pull request
 
 Use the PR template. Link any related issues.

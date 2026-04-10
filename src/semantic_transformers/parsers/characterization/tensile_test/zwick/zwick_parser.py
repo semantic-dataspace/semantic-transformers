@@ -61,6 +61,7 @@ transform do not need to change.
 from __future__ import annotations
 
 import csv
+import datetime
 import json
 from pathlib import Path
 from typing import Optional
@@ -83,12 +84,22 @@ _DEFAULT_METADATA_ROWS = 20
 # code changes are needed; the Transformer shares the loaded schema via
 # configure() so types are always read from the current schema version.
 _DEFAULT_META_FIELD_MAP: dict[str, str] = {
-    "Prüfnorm":            "test_standard",
-    "Temperatur":          "temperature",
-    "Prüfgeschwindigkeit": "strain_rate",
+    "Prüfnorm":              "test_standard",
+    "Temperatur":            "temperature",
+    "Prüfgeschwindigkeit":   "strain_rate",
+    "Messlänge Standardweg": "gauge_length",
+    "Vorkraft":              "preload",
 }
 
-# Label whose *unit* column is used as the strain_rate_unit.
+# Labels whose unit column is extracted into a companion field.
+# Maps: CSV label → (simplified JSON unit field, fallback unit string)
+_DEFAULT_UNIT_FIELD_MAP: dict[str, tuple[str, str]] = {
+    "Prüfgeschwindigkeit":   ("strain_rate_unit",   "mm/s"),
+    "Messlänge Standardweg": ("gauge_length_unit",  "mm"),
+    "Vorkraft":              ("preload_unit",        "MPa"),
+}
+
+# Kept for backwards compatibility with from_config() callers that set strain_rate_label.
 _STRAIN_RATE_LABEL = "Prüfgeschwindigkeit"
 
 
@@ -112,10 +123,15 @@ class ZwickParser(SchemaAwareParser):
     meta_field_map:
         Mapping of metadata label strings to simplified JSON field names.
         Overrides the default German-label map when provided.
+    unit_field_map:
+        Mapping from CSV label to ``(simplified_field_name, fallback_unit)``.
+        For each listed label the unit column of that metadata row is read and
+        stored in the simplified JSON under *simplified_field_name*.  Overrides
+        the default map when provided.
     strain_rate_label:
-        The metadata label whose unit column is carried into the simplified
-        JSON as ``strain_rate_unit``.  Default: ``"Prüfgeschwindigkeit"``.
-        Set to ``None`` to skip.
+        Deprecated.  Use *unit_field_map* instead.  When provided and not
+        present in *unit_field_map*, a ``("strain_rate_unit", "mm/s")`` entry
+        is added automatically for backwards compatibility.
     """
 
     def __init__(
@@ -124,6 +140,7 @@ class ZwickParser(SchemaAwareParser):
         *,
         metadata_rows: int = _DEFAULT_METADATA_ROWS,
         meta_field_map: Optional[dict[str, str]] = None,
+        unit_field_map: Optional[dict[str, tuple[str, str]]] = None,
         strain_rate_label: Optional[str] = _STRAIN_RATE_LABEL,
     ) -> None:
         if column_mapping_path is None:
@@ -133,9 +150,19 @@ class ZwickParser(SchemaAwareParser):
         self._col_iris:  dict[str, str] = {m["key"]: m["iri"]      for m in mapping}
         self._col_units: dict[str, str] = {m["key"]: m["unit_iri"] for m in mapping}
 
-        self._metadata_rows     = metadata_rows
-        self._meta_field_map    = meta_field_map if meta_field_map is not None else _DEFAULT_META_FIELD_MAP
-        self._strain_rate_label = strain_rate_label
+        self._metadata_rows  = metadata_rows
+        self._meta_field_map = meta_field_map if meta_field_map is not None else _DEFAULT_META_FIELD_MAP
+
+        if unit_field_map is not None:
+            self._unit_field_map: dict[str, tuple[str, str]] = unit_field_map
+        else:
+            self._unit_field_map = dict(_DEFAULT_UNIT_FIELD_MAP)
+            # Backwards-compat: honour a custom strain_rate_label if given.
+            if strain_rate_label and strain_rate_label != _STRAIN_RATE_LABEL:
+                self._unit_field_map[strain_rate_label] = ("strain_rate_unit", "mm/s")
+            elif strain_rate_label is None:
+                self._unit_field_map.pop(_STRAIN_RATE_LABEL, None)
+
         self._field_types: dict[str, str] = {}
 
     # ------------------------------------------------------------------
@@ -166,9 +193,10 @@ class ZwickParser(SchemaAwareParser):
 
         Supported config keys (all optional)
         -------------------------------------
-        metadata_rows (int):     rows before the column-header row
-        strain_rate_label (str): set to null to disable
-        meta_field_map (dict):   label → field_name
+        metadata_rows (int):      rows before the column-header row
+        strain_rate_label (str):  set to null to disable (deprecated, prefer unit_field_map)
+        meta_field_map (dict):    label → field_name
+        unit_field_map (dict):    label → {field: name, fallback: unit}
 
         Example
         -------
@@ -184,10 +212,18 @@ class ZwickParser(SchemaAwareParser):
         if "meta_field_map" in cfg:
             meta_field_map = dict(cfg["meta_field_map"])
 
+        unit_field_map = None
+        if "unit_field_map" in cfg:
+            unit_field_map = {
+                label: (entry["field"], entry.get("fallback", ""))
+                for label, entry in cfg["unit_field_map"].items()
+            }
+
         return cls(
             column_mapping_path = column_mapping_path,
             metadata_rows       = cfg.get("metadata_rows", _DEFAULT_METADATA_ROWS),
             meta_field_map      = meta_field_map,
+            unit_field_map      = unit_field_map,
             strain_rate_label   = cfg.get("strain_rate_label", _STRAIN_RATE_LABEL),
         )
 
@@ -227,6 +263,22 @@ class ZwickParser(SchemaAwareParser):
             result[label] = (value, unit)
         return result
 
+    @staticmethod
+    def _excel_serial_to_iso(value_str: str) -> str | None:
+        """
+        Convert a Zwick/Excel date serial number to an ISO 8601 datetime string.
+
+        Excel counts days from 1899-12-30 (the effective epoch after its
+        off-by-one leap-year bug).  The fractional part encodes the time of day.
+        Returns None if *value_str* cannot be parsed as a number.
+        """
+        try:
+            serial = float(value_str)
+        except (ValueError, TypeError):
+            return None
+        dt = datetime.datetime(1899, 12, 30) + datetime.timedelta(days=serial)
+        return dt.strftime("%Y-%m-%dT%H:%M:%S")
+
     def _cast(self, value_str: str, field_name: str) -> str | float | int:
         """
         Cast *value_str* to the type declared for *field_name* in the schema.
@@ -257,6 +309,13 @@ class ZwickParser(SchemaAwareParser):
         # Derive test_name from the file stem (user can override via transformer.run).
         simplified["test_name"] = path.stem
 
+        # Parse the test date (Datum/Uhrzeit) from its Excel serial-number format.
+        if "Datum/Uhrzeit" in meta:
+            date_str = meta["Datum/Uhrzeit"][0].strip()
+            iso_dt = self._excel_serial_to_iso(date_str)
+            if iso_dt:
+                simplified["test_date"] = iso_dt
+
         for csv_label, json_field in self._meta_field_map.items():
             if csv_label not in meta:
                 continue
@@ -265,10 +324,12 @@ class ZwickParser(SchemaAwareParser):
                 continue
             simplified[json_field] = self._cast(value_str, json_field)
 
-        # Carry the testing-rate unit separately so the transform can use it.
-        if self._strain_rate_label and self._strain_rate_label in meta:
-            unit_str = meta[self._strain_rate_label][1]
-            simplified["strain_rate_unit"] = unit_str or "mm/s"
+        # For each field that carries a companion unit, read the unit column.
+        for csv_label, (unit_field, fallback) in self._unit_field_map.items():
+            if csv_label not in meta:
+                continue
+            unit_str = meta[csv_label][1]
+            simplified[unit_field] = unit_str if unit_str else fallback
 
         return simplified
 

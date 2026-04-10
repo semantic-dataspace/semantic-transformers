@@ -80,7 +80,8 @@ repository.
 src/semantic_transformers/parsers/<domain>/<specialisation>/<machine>/
   <machine>_parser.py  Reads the instrument file → ParseResult
   column_mapping.json  Maps column names to ontology IRIs and QUDT units
-  README.md            Quick-start, schema compatibility, and known limitations
+  README.md            Quick-start, current schema compatibility, known limitations
+  CHANGELOG.md         Schema compatibility history (which parser version works with which schema version)
 ```
 
 The folder path mirrors the `schemas/` tree in `semantic-schemas`, but
@@ -183,17 +184,22 @@ The user sees none of this; they just write
 Columns without a known ontology class can be omitted; they still appear in
 the DataFrame.
 
-### Step 5: write README.md
+### Step 5: write README.md and CHANGELOG.md
 
-Include these sections (use the Zwick README as a template):
+**README.md** — use the Zwick README as a template. Include:
 
-- **Schema compatibility**: the `semantic-schemas` path and version you tested against, and
-  which files are used (`transform.jsonata`, `schema.oold.yaml`, `shape.ttl`).
-  Update the version whenever you re-test against a newer schema release.
+- **Schema compatibility**: the `semantic-schemas` path and the current tested version.
+  Update this table whenever you re-test against a newer schema release.
+  Link to `CHANGELOG.md` for the full history.
 - **Supported instruments**: brand, models, software version, export format.
 - **File layout**: what the parser expects to find in the file.
 - **Quick start**: a minimal code snippet.
 - **Known limitations**.
+
+**CHANGELOG.md** — a compact compatibility table mapping parser versions to schema
+versions (use the Zwick CHANGELOG as a template). This is the authoritative record
+of which parser release was tested against which schema release. It is not shipped
+in the PyPI wheel; it is for contributors and schema maintainers.
 
 ### Step 6: test end-to-end
 
@@ -217,10 +223,7 @@ Validate against SHACL shapes to catch structural errors early:
 ```python
 import pyshacl, rdflib
 
-flat = rdflib.Graph()
-for s, p, o, _ in result.graph.quads():
-    flat.add((s, p, o))
-
+flat   = result.flat_graph   # rdflib.Graph with correct namespace bindings
 shapes = rdflib.Graph().parse('/path/to/.../specs/shape.ttl')
 conforms, _, report = pyshacl.validate(flat, shacl_graph=shapes, inference='rdfs')
 print('Conforms:', conforms)
@@ -232,7 +235,7 @@ if not conforms:
 
 Open a pull request with:
 
-- The three files in the correct folder (`<machine>_parser.py`, `column_mapping.json`, `README.md`)
+- The four files in the correct folder (`<machine>_parser.py`, `column_mapping.json`, `README.md`, `CHANGELOG.md`)
 - A sample instrument file in `tests/data/` (anonymised if needed)
 - A test module that runs `transformer.run()` on the sample file
 
