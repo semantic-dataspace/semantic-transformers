@@ -5,6 +5,7 @@ For the full parser version history see the
 
 | Parser version | Compatible schema version | Notes |
 |---|---|---|
+| 0.4.0 | TTO **3.0.0** | `column_iris` now emits TTO v3.0.0 numeric IRIs; `None` for columns without class; time-series uses `csvw:Table`/`IAO_0000039` pattern |
 | 0.3.0 | TTO **1.1.0** | no parser changes; library adds unit auto-resolution for `unit_column: true` |
 | 0.2.0 | TTO **1.1.0** | parser renamed from `ZwickParser` to `TestXpertIIIParser`; no schema changes |
 | 0.1.5 | TTO **1.1.0** | adds `gauge_length`, `preload`, `test_date`; backwards-compatible with 1.0.0 |

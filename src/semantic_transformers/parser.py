@@ -41,8 +41,9 @@ class ParseResult:
     # Raw time-series data.  None when the file has no tabular measurements.
     timeseries: pd.DataFrame | None = None
 
-    # Column name → ontology class IRI (e.g. "https://w3id.org/pmd/tto/TestTime")
-    column_iris: dict[str, str] = field(default_factory=dict)
+    # Column name → ontology class IRI, or None when no class applies.
+    # (e.g. "https://w3id.org/pmd/tto/TTO_0000005" for extension columns)
+    column_iris: dict[str, str | None] = field(default_factory=dict)
 
     # Column name → QUDT unit IRI (e.g. "http://qudt.org/vocab/unit/SEC")
     column_units: dict[str, str] = field(default_factory=dict)

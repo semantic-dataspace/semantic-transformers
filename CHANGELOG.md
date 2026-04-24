@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-24
+
+### Added
+
+- `QuickMapper` — `unit_from_file: true` on a **column** annotation: reads the
+  unit string from the file's units row (the row that `skip_after_header` skips)
+  and resolves it to a QUDT IRI automatically.  Resolved and unresolved results
+  are included in `result.oold_doc["unit_resolutions"]`.
+- `QuickMapper`: column `unit:` plain strings (e.g. `"mm"`, `"N"`, `"s"`, `"%"`)
+  are now automatically resolved to QUDT IRIs using the same built-in alias table.
+  Full IRIs are passed through unchanged.
+- `QuickMapper`: column descriptors are now created for every annotated column —
+  not only columns that have an `iri` key.  A column with only a `unit` annotation
+  still gets a `csvw:Column` node in the graph with an `obo:IAO_0000039` unit triple.
+- `QuickMapper`: metadata `unit:` plain strings are auto-resolved to QUDT IRIs
+  before the triple is written (e.g. `unit: "°C"` → `obo:IAO_0000039 uqudt:DEG_C`).
+
+### Changed
+
+- **`Transformer._add_timeseries_nodes`**: time-series descriptor pattern
+  (`container_type`, `column_predicate`, `column_type`, `unit_predicate`, …) is now
+  read from the schema's `timeseries_pattern` block rather than being hardcoded.
+  Schemas that add a `timeseries_pattern` key control how the library serialises
+  column descriptors; the default pattern uses `csvw:Table` / `csvw:Column` /
+  `obo:IAO_0000039` — matching the TTO/PMDCo3 S355 reference dataset.
+- **`QuickMapper`**: column descriptor pattern (`column_predicate`, `column_type`,
+  `column_name_predicate`, `unit_predicate`) is now read from the mapping config's
+  optional `column_pattern` key; defaults to the same csvw / `obo:IAO_0000039`
+  pattern as the Transformer.  The previous default (`dcat:Dataset` root type,
+  `qudt:hasUnit` unit predicate) is no longer emitted.
+- **`QuickMapper`**: `result.oold_doc["unit_resolutions"]` and `result.oold_doc["metadata"][…]["unit"]`
+  now store the resolved QUDT IRI when `unit_column: true` resolves successfully,
+  rather than the raw unit string from the file.
+- **`ParseResult.column_iris`** type widened from `dict[str, str]` to
+  `dict[str, str | None]`.  Parsers that map a column to an ontology class may now
+  emit `None` for columns that have no applicable class.
+- **`unit_column: true`** renamed to **`unit_from_file: true`** in mapping configs
+  (both metadata fields and, new in this release, column annotations).  The old key
+  name is no longer recognised; update existing YAML configs accordingly.
+- **TestXpertIII parser** (`testxpert_iii/parser.py`): `column_iris` now emits
+  `None` for `Prüfzeit` and `Standardkraft` (no TTO v3 class); full TTO v3.0.0
+  numeric IRIs for `Dehnung` (`TTO_0000004`), `Standardweg` (`TTO_0000005`),
+  `Breitenänderung` (`TTO_0000011`), `Traversenweg absolut` (`TTO_0000013`).
+
+### Fixed
+
+- **`column_mapping.json`** (testXpert III / de): `Dehnung` unit corrected from
+  `MilliM` to `PERCENT` — the example file's units row reports `%` for this column,
+  and TTO `TTO_0000004` (elongation) is a dimensionless ratio expressed in percent.
+  All TTO class references updated from v2 human-readable IRIs to TTO v3.0.0
+  numeric IRIs or `null` where no v3 class exists.
+- **QuickMapper quickstart notebook** (`docs/3_quickstart-mapping.ipynb`):
+  column annotations updated to TTO v3.0.0 numeric IRIs; plain-string units used
+  throughout to demonstrate automatic unit resolution; root type updated from
+  `dcat:Dataset` to `csvw:Table` in the description cell.
+
+### Migration
+
+Consumers reading `result.column_iris` should guard against `None` values:
+
+```python
+iri = result.column_iris.get(col)
+cls = iri.rsplit('/', 1)[-1] if iri else '—'
+```
+
+Consumers reading `result.oold_doc["metadata"][field]["unit"]` for `unit_column: true`
+fields will now receive a QUDT IRI string instead of the raw unit string.
+
+Mapping configs that relied on `dcat:Dataset` as the default root type should set
+`root_type: "http://www.w3.org/ns/csvw#Table"` explicitly (or omit `root_type` to
+accept the new default).
+
 ## [0.3.1] - 2026-04-24
 
 ### Fixed

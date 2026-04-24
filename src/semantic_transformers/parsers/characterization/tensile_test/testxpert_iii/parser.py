@@ -22,7 +22,7 @@ Output
 Produces a ParseResult where:
   simplified_json  maps the metadata to the tensile-test/TTO simplified schema
   timeseries       is a pandas DataFrame with the original column names
-  column_iris      maps each column to its TTO class IRI  (from column_mapping.json)
+  column_iris      maps each column to its TTO class IRI, or None for columns without a TTO v3.0.0 class  (from column_mapping.json)
   column_units     maps each column to its QUDT unit IRI  (from column_mapping.json)
 
 Schema-driven type coercion
@@ -116,8 +116,9 @@ class TestXpertIIIParser(SchemaAwareParser):
             )
 
         mapping = json.loads(column_mapping_path.read_text(encoding="utf-8"))
-        self._col_iris:  dict[str, str] = {m["key"]: m["iri"]      for m in mapping}
-        self._col_units: dict[str, str] = {m["key"]: m["unit_iri"] for m in mapping}
+        # iri may be null for columns that have no applicable ontology class.
+        self._col_iris:  dict[str, str | None] = {m["key"]: m.get("iri")      for m in mapping}
+        self._col_units: dict[str, str]         = {m["key"]: m["unit_iri"]     for m in mapping if m.get("unit_iri")}
 
         self._metadata_rows  = metadata_rows
         self._meta_field_map = meta_field_map if meta_field_map is not None else {}

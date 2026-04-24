@@ -49,12 +49,22 @@ from jsonata.jsonata import Jsonata
 
 from .parser import Parser, ParseResult, SchemaAwareParser
 
-# Namespaces used when generating timeseries descriptor triples.
-_DCAT   = rdflib.Namespace("http://www.w3.org/ns/dcat#")
-_QUDT   = rdflib.Namespace("http://qudt.org/schema/qudt/")
 _OBI    = rdflib.Namespace("http://purl.obolibrary.org/obo/OBI_")
 _RDFS   = rdflib.RDFS
 _RDF    = rdflib.RDF
+
+# Default timeseries descriptor pattern — follows the csvw + IAO_0000039 pattern
+# used in TTO v3.0.0 reference data (S355_data_tto_pmdco3.ttl).  Each schema
+# may override this by providing a "timeseries_pattern" top-level key in its
+# schema.oold.yaml.
+_DEFAULT_TIMESERIES_PATTERN: dict = {
+    "container_type":      "http://www.w3.org/ns/csvw#Table",
+    "column_predicate":    "http://www.w3.org/ns/csvw#column",
+    "column_type":         "http://www.w3.org/ns/csvw#Column",
+    "column_name_predicate": "http://www.w3.org/ns/csvw#name",
+    "unit_predicate":      "http://purl.obolibrary.org/obo/IAO_0000039",
+    "container_label":     "Raw time series",
+}
 
 # Standard file paths relative to a schema folder root.
 _JSONATA_REL     = "specs/transform.simplified.jsonata"
@@ -238,6 +248,10 @@ class Transformer:
         raw = yaml.safe_load(_read_text(oold_schema))
         self._context = raw["@context"]
         self._base    = self._context.get("@base", "")
+        self._timeseries_pattern: dict = {
+            **_DEFAULT_TIMESERIES_PATTERN,
+            **raw.get("timeseries_pattern", {}),
+        }
 
         self._input_schema: dict | None = (
             json.loads(_read_text(input_schema))
@@ -355,39 +369,56 @@ class Transformer:
         parsed: ParseResult,
     ) -> None:
         """
-        Add a dcat:Dataset node for the time series and one descriptor node
-        per column.  Only IRIs and units go into the graph (not the values).
+        Add a descriptor container node for the time series and one column
+        descriptor node per measurement column.  Only semantic annotations
+        (class IRIs, units) go into the graph — numeric values stay in the
+        DataFrame.
 
-        Graph pattern added
-        -------------------
-            <test_iri>  obi:has_specified_output  <test_iri/timeseries> .
+        The RDF pattern is read from ``self._timeseries_pattern``, which is
+        populated from the ``timeseries_pattern`` key in the schema's
+        ``schema.oold.yaml``.  The default follows the csvw + IAO_0000039
+        pattern used in TTO v3.0.0 reference data:
+
+            <test_iri>  obi:OBI_0000299  <test_iri/timeseries> .
 
             <test_iri/timeseries>
-                a               dcat:Dataset ;
-                rdfs:label      "Raw time series" ;
-                dcat:distribution  <test_iri/timeseries/ColumnName>, ... .
+                a               csvw:Table ;
+                rdfs:label      "Raw time series" .
 
             <test_iri/timeseries/ColumnName>
-                a               <column_class_iri> ;
+                a               csvw:Column ;
+                a               <tto_class_iri> ;   # when a TTO class applies
                 rdfs:label      "ColumnName" ;
-                qudt:hasUnit    <unit_iri> .
+                csvw:name       "ColumnName" ;
+                obo:IAO_0000039 <unit_iri> .        # when a unit applies
         """
+        p   = self._timeseries_pattern
         ctx = g.default_graph
+
+        container_type  = rdflib.URIRef(p["container_type"])
+        col_pred        = rdflib.URIRef(p["column_predicate"])
+        col_type        = rdflib.URIRef(p["column_type"])
+        name_pred       = rdflib.URIRef(p["column_name_predicate"])
+        unit_pred       = rdflib.URIRef(p["unit_predicate"])
+        label           = p.get("container_label", "Raw time series")
 
         ds_iri = rdflib.URIRef(str(test_iri) + "/timeseries")
 
-        ctx.add((test_iri, _OBI["0000299"], ds_iri))   # has_specified_output
-        ctx.add((ds_iri, _RDF.type,   _DCAT.Dataset))
-        ctx.add((ds_iri, _RDFS.label, rdflib.Literal("Raw time series")))
+        ctx.add((test_iri, _OBI["0000299"], ds_iri))
+        ctx.add((ds_iri, _RDF.type,   container_type))
+        ctx.add((ds_iri, _RDFS.label, rdflib.Literal(label)))
 
         for col_name, col_class in parsed.column_iris.items():
             safe    = col_name.replace(" ", "_")
             col_uri = rdflib.URIRef(str(ds_iri) + "/" + safe)
 
-            ctx.add((ds_iri,    _DCAT.distribution, col_uri))
-            ctx.add((col_uri,   _RDF.type,          rdflib.URIRef(col_class)))
-            ctx.add((col_uri,   _RDFS.label,        rdflib.Literal(col_name)))
+            ctx.add((ds_iri,  col_pred,   col_uri))
+            ctx.add((col_uri, _RDF.type,  col_type))
+            if col_class:
+                ctx.add((col_uri, _RDF.type, rdflib.URIRef(col_class)))
+            ctx.add((col_uri, _RDFS.label, rdflib.Literal(col_name)))
+            ctx.add((col_uri, name_pred,   rdflib.Literal(col_name)))
 
             unit_iri = parsed.column_units.get(col_name)
             if unit_iri:
-                ctx.add((col_uri, _QUDT.hasUnit, rdflib.URIRef(unit_iri)))
+                ctx.add((col_uri, unit_pred, rdflib.URIRef(unit_iri)))
