@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-24
+
+### Added
+
+- `unit_column: true` now automatically resolves unit strings to QUDT IRIs
+  using a built-in lookup table covering common lab units (N, kN, mm, MPa,
+  °C, s, %, and ~30 more). Resolved units are stored with `qudt:hasUnit <IRI>`;
+  unrecognised strings fall back to `qudt:unit "string"` as before.
+- `result.oold_doc["unit_resolutions"]`: dict mapping each file unit string to
+  its resolved QUDT IRI, or `null` if no match was found.
+- `QuickMapper.run()` prints a resolution summary attributed to the source file
+  (e.g. `QuickMapper: unit resolution for 'my_file.TXT': ...`) whenever
+  `unit_column: true` fields are present.
+
+### Changed
+
+- `QuickMapper` quickstart notebook: added a "What does a measurement file look
+  like?" section; added unit resolution and unrecognised-unit example cells.
+- README folder structure updated to reflect the `parser.py` + locale-subfolder
+  layout introduced in v0.2.0.
+- `docs/1_getting-started.md`: terminology aligned (`skip_rows` comment now
+  says "column names row").
+
 ## [0.2.0] - 2026-04-24
 
 ### Breaking

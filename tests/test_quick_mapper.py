@@ -359,7 +359,8 @@ class TestMetadata:
         values = list(g.objects(predicate=rdflib.RDF.value))
         assert any(float(v) == 22.5 for v in values)
 
-    def test_unit_column_reads_unit_from_file(self, tmp_path):
+    def test_unit_column_builtin_alias_resolves_to_iri(self, tmp_path):
+        # "mm/s" is in the built-in alias table → expect qudt:hasUnit with the IRI
         mapping = {
             **_META_MAPPING_BASE,
             "metadata": {
@@ -375,8 +376,58 @@ class TestMetadata:
         result = QuickMapper(mapping).run(_meta_file(tmp_path))
         g = _flat_graph(result)
         QUDT = rdflib.Namespace("http://qudt.org/schema/qudt/")
+        unit_iris = list(g.objects(predicate=QUDT.hasUnit))
+        assert any("MilliM-PER-SEC" in str(u) for u in unit_iris)
+
+    def test_unit_column_unknown_unit_falls_back_to_string(self, tmp_path):
+        # A unit string not in any alias table is stored as a plain qudt:unit literal
+        p = tmp_path / "unknown.tsv"
+        p.write_text('"Gauge"\t5.0\t"widgets/hour"\n"Col"\n0.0\n', encoding="utf-8")
+        mapping = {
+            "columns": {},
+            "file": {"skip_rows": 1, "separator": "\t"},
+            "metadata": {
+                "rows": 1,
+                "fields": {
+                    "Gauge": {"property": "http://example.org/gauge", "unit_column": True}
+                },
+            },
+        }
+        result = QuickMapper(mapping).run(p)
+        g = _flat_graph(result)
+        QUDT = rdflib.Namespace("http://qudt.org/schema/qudt/")
         unit_lits = list(g.objects(predicate=QUDT.unit))
-        assert any(str(u) == "mm/s" for u in unit_lits)
+        assert any(str(u) == "widgets/hour" for u in unit_lits)
+
+    def test_unit_resolutions_reported_in_oold_doc(self, tmp_path):
+        mapping = {
+            **_META_MAPPING_BASE,
+            "metadata": {
+                **_META_MAPPING_BASE["metadata"],
+                "fields": {
+                    "Speed": {"property": "http://example.org/speed", "unit_column": True},
+                },
+            },
+        }
+        result = QuickMapper(mapping).run(_meta_file(tmp_path))
+        resolutions = result.oold_doc.get("unit_resolutions", {})
+        assert "mm/s" in resolutions
+        assert resolutions["mm/s"] is not None  # resolved to a QUDT IRI
+
+    def test_unresolved_unit_is_none_in_oold_doc(self, tmp_path):
+        p = tmp_path / "unknown.tsv"
+        p.write_text('"Gauge"\t5.0\t"widgets/hour"\n"Col"\n0.0\n', encoding="utf-8")
+        mapping = {
+            "columns": {},
+            "file": {"skip_rows": 1, "separator": "\t"},
+            "metadata": {
+                "rows": 1,
+                "fields": {"Gauge": {"property": "http://example.org/gauge", "unit_column": True}},
+            },
+        }
+        result = QuickMapper(mapping).run(p)
+        resolutions = result.oold_doc.get("unit_resolutions", {})
+        assert resolutions.get("widgets/hour") is None
 
     def test_oold_doc_metadata_key_present(self, tmp_path):
         mapping = {

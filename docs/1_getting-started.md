@@ -164,7 +164,7 @@ separators, metadata rows to skip), add a `file:` block to the mapping:
 
 ```yaml
 file:
-  skip_rows: 3        # skip 3 rows before the header
+  skip_rows: 3        # skip 3 rows before the column names row
   separator: ";"      # use semicolon instead of comma
 ```
 

@@ -11,10 +11,12 @@ semantic-transformers/
     parsers/                   Machine-specific file parsers
       <domain>/                Mirrors the semantic-schemas folder structure
         <specialisation>/
-          <machine>/           One folder per instrument model
-            <machine>_parser.py  Reads the instrument file
-            column_mapping.json  Maps column names to ontology class IRIs and units
-            README.md            Quick-start, schema compatibility, and known limitations
+          <instrument>/        One folder per instrument model
+            parser.py          Language-agnostic parsing logic
+            README.md          Quick-start, schema compatibility, and known limitations
+            CHANGELOG.md       Schema compatibility history
+            <lang>/            One subfolder per export language (e.g. de/, en/)
+              column_mapping.json  Maps locale-specific column names to ontology IRIs and units
   docs/                        Guides for users and contributors
 ```
 

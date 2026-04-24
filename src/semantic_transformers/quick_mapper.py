@@ -48,7 +48,9 @@ Mapping config format
         "Label with file unit":
           property: "https://example.org/vocab/speed"
           unit_column: true     # read unit string from the row's third column
-          # value and unit are stored as a value/unit pair
+          # the string is looked up in the built-in alias table and stored as
+          # qudt:hasUnit <IRI> when matched, or qudt:unit "string" as a fallback.
+          # result.oold_doc["unit_resolutions"] shows what was resolved.
 
     # column annotations (only annotated columns get ontology triples)
     columns:
@@ -93,6 +95,66 @@ _XSD   = rdflib.XSD
 
 _DEFAULT_ROOT_TYPE = "http://www.w3.org/ns/dcat#Dataset"
 _DEFAULT_BASE      = "https://example.org/datasets/"
+
+# ---------------------------------------------------------------------------
+# Built-in unit alias table
+# ---------------------------------------------------------------------------
+# Maps unit strings commonly written by lab instruments to their QUDT IRIs.
+# Used when unit_column: true is set on a metadata field.  User-defined
+# unit_aliases in the mapping config take priority over these entries.
+# Covers QUDT v2.1 vocabulary; extend via unit_aliases for anything missing.
+
+_QUDT_BASE = "http://qudt.org/vocab/unit/"
+
+_BUILTIN_UNIT_ALIASES: dict[str, str] = {
+    # Length
+    "m":        _QUDT_BASE + "M",
+    "cm":       _QUDT_BASE + "CentiM",
+    "mm":       _QUDT_BASE + "MilliM",
+    "µm":       _QUDT_BASE + "MicroM",
+    "um":       _QUDT_BASE + "MicroM",       # ASCII fallback for µm
+    # Velocity
+    "m/s":      _QUDT_BASE + "M-PER-SEC",
+    "mm/s":     _QUDT_BASE + "MilliM-PER-SEC",
+    "mm/min":   _QUDT_BASE + "MilliM-PER-MIN",
+    # Force
+    "N":        _QUDT_BASE + "N",
+    "kN":       _QUDT_BASE + "KiloN",
+    "mN":       _QUDT_BASE + "MilliN",
+    # Stress / pressure
+    "Pa":       _QUDT_BASE + "PA",
+    "kPa":      _QUDT_BASE + "KiloPA",
+    "MPa":      _QUDT_BASE + "MegaPA",
+    "GPa":      _QUDT_BASE + "GigaPA",
+    "bar":      _QUDT_BASE + "BAR",
+    "mbar":     _QUDT_BASE + "MilliBAR",
+    # Time
+    "s":        _QUDT_BASE + "SEC",
+    "min":      _QUDT_BASE + "MIN",
+    "h":        _QUDT_BASE + "HR",
+    # Temperature
+    "°C":       _QUDT_BASE + "DEG_C",
+    "K":        _QUDT_BASE + "K",
+    # Mass
+    "kg":       _QUDT_BASE + "KiloGM",
+    "g":        _QUDT_BASE + "GM",
+    # Dimensionless
+    "%":        _QUDT_BASE + "PERCENT",
+    # Energy
+    "J":        _QUDT_BASE + "J",
+    "kJ":       _QUDT_BASE + "KiloJ",
+    # Power
+    "W":        _QUDT_BASE + "W",
+    "kW":       _QUDT_BASE + "KiloW",
+    # Torque
+    "Nm":       _QUDT_BASE + "N-M",
+    "N·m":      _QUDT_BASE + "N-M",
+}
+
+
+def _resolve_unit(unit_str: str) -> str | None:
+    """Return a QUDT IRI for *unit_str* from :data:`_BUILTIN_UNIT_ALIASES`, or None."""
+    return _BUILTIN_UNIT_ALIASES.get(unit_str.strip())
 
 
 class QuickMapper:
@@ -180,8 +242,11 @@ class QuickMapper:
 
         # Metadata triples
         extracted_meta: dict = {}
+        unit_resolutions: dict[str, str | None] = {}
         if meta_fields and meta_raw:
-            extracted_meta = self._add_metadata_triples(ctx, dataset_id, meta_raw, meta_fields)
+            extracted_meta, unit_resolutions = self._add_metadata_triples(
+                ctx, dataset_id, meta_raw, meta_fields
+            )
 
         # Column descriptor triples
         for col_name, col_iri in column_iris.items():
@@ -197,7 +262,7 @@ class QuickMapper:
                 ctx.add((col_uri, _QUDT.hasUnit, rdflib.URIRef(unit_iri)))
 
         # ── 5. Build a lightweight summary doc ───────────────────────
-        oold_doc = {
+        oold_doc: dict = {
             "id":       str(dataset_id),
             "type":     root_type,
             "label":    label,
@@ -208,6 +273,9 @@ class QuickMapper:
                 for col, iri in column_iris.items()
             },
         }
+        if unit_resolutions:
+            oold_doc["unit_resolutions"] = unit_resolutions
+            self._print_unit_resolutions(unit_resolutions, path)
 
         return TransformResult(
             graph        = g,
@@ -245,15 +313,21 @@ class QuickMapper:
         root: rdflib.URIRef,
         meta_raw: dict[str, tuple[str, str]],
         fields_cfg: dict,
-    ) -> dict:
+    ) -> tuple[dict, dict[str, str | None]]:
         """
-        Add metadata triples to ctx.  Returns extracted {label: ...} for oold_doc.
+        Add metadata triples to ctx.
+
+        Returns ``(extracted, unit_resolutions)`` where ``extracted`` is the
+        ``{label: ...}`` dict for oold_doc and ``unit_resolutions`` maps each
+        unit string read from the file (unit_column: true) to its resolved QUDT
+        IRI, or None when no match was found in the built-in alias table.
 
         - Plain value  → ``<root> <property> <literal>``
-        - Value + unit → ``<root> <property> [rdf:value <v>; qudt:hasUnit <unit_iri>]``
-                      or ``<root> <property> [rdf:value <v>; qudt:unit "unit_str"]``
+        - Value + unit → ``<root> <property> [rdf:value <v>; qudt:hasUnit <IRI>]``
+          or  ``<root> <property> [rdf:value <v>; qudt:unit "string"]`` if unresolved.
         """
         extracted: dict = {}
+        unit_resolutions: dict[str, str | None] = {}
         for label, field_cfg in fields_cfg.items():
             if label not in meta_raw:
                 continue
@@ -281,13 +355,29 @@ class QuickMapper:
                 if unit_iri:
                     ctx.add((bn, _QUDT.hasUnit, rdflib.URIRef(unit_iri)))
                 else:
-                    ctx.add((bn, _QUDT.unit, rdflib.Literal(file_unit)))
+                    resolved = _resolve_unit(file_unit)
+                    unit_resolutions[file_unit] = resolved
+                    if resolved:
+                        ctx.add((bn, _QUDT.hasUnit, rdflib.URIRef(resolved)))
+                    else:
+                        ctx.add((bn, _QUDT.unit, rdflib.Literal(file_unit)))
                 extracted[label] = {"value": value_str, "unit": unit_iri or file_unit}
             else:
                 ctx.add((root, pred, lit))
                 extracted[label] = {"value": value_str}
 
-        return extracted
+        return extracted, unit_resolutions
+
+    @staticmethod
+    def _print_unit_resolutions(
+        unit_resolutions: dict[str, str | None], path: Path
+    ) -> None:
+        print(f"QuickMapper: unit resolution for '{path.name}':")
+        for unit_str, iri in unit_resolutions.items():
+            if iri:
+                print(f"  resolved   {unit_str!r:15}  ->  {iri}")
+            else:
+                print(f"  not found  {unit_str!r:15}  ->  stored as plain string")
 
     def _read_file(self, path: Path, file_cfg: dict):
         """Read *path* into a pandas DataFrame using *file_cfg* hints."""
