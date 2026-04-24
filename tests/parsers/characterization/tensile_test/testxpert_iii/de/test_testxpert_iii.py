@@ -83,9 +83,10 @@ class TestColumnAnnotations:
     def test_column_units_non_empty(self, result):
         assert len(result.column_units) > 0
 
-    def test_standardkraft_iri(self, result):
+    def test_standardkraft_has_no_class_iri(self, result):
+        # Standardkraft has no TTO v3.0.0 class IRI; column_iris maps it to None
         assert "Standardkraft" in result.column_iris
-        assert "StandardForce" in result.column_iris["Standardkraft"]
+        assert result.column_iris["Standardkraft"] is None
 
     def test_standardkraft_unit_ends_with_newton(self, result):
         assert "Standardkraft" in result.column_units

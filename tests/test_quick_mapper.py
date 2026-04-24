@@ -192,29 +192,29 @@ class TestRDFGraph:
     def test_graph_non_empty(self, graph):
         assert len(graph) > 0
 
-    def test_root_node_typed_as_dcat_dataset(self, graph):
-        DCAT = rdflib.Namespace("http://www.w3.org/ns/dcat#")
-        subjects = list(graph.subjects(rdflib.RDF.type, DCAT.Dataset))
+    def test_root_node_typed_as_csvw_table(self, graph):
+        CSVW = rdflib.Namespace("http://www.w3.org/ns/csvw#")
+        subjects = list(graph.subjects(rdflib.RDF.type, CSVW.Table))
         assert len(subjects) == 1
 
     def test_root_node_has_label(self, graph):
         labels = list(graph.objects(predicate=rdflib.RDFS.label))
         assert any(str(l) == "test-run" for l in labels)
 
-    def test_mapped_columns_have_distribution_triples(self, graph):
-        DCAT = rdflib.Namespace("http://www.w3.org/ns/dcat#")
-        distributions = list(graph.subject_objects(DCAT.distribution))
-        assert len(distributions) == 2  # Force + Extension
+    def test_mapped_columns_have_column_triples(self, graph):
+        CSVW = rdflib.Namespace("http://www.w3.org/ns/csvw#")
+        columns = list(graph.subject_objects(CSVW.column))
+        assert len(columns) == 2  # Force + Extension
 
     def test_force_column_has_unit(self, graph):
-        QUDT = rdflib.Namespace("http://qudt.org/schema/qudt/")
-        units = list(graph.objects(predicate=QUDT.hasUnit))
+        IAO = rdflib.Namespace("http://purl.obolibrary.org/obo/IAO_")
+        units = list(graph.objects(predicate=IAO["0000039"]))
         assert any(str(u) == "http://qudt.org/vocab/unit/N" for u in units)
 
     def test_extension_column_has_no_unit(self, graph):
-        QUDT = rdflib.Namespace("http://qudt.org/schema/qudt/")
+        IAO = rdflib.Namespace("http://purl.obolibrary.org/obo/IAO_")
         # Extension has no unit in the mapping
-        units = list(graph.objects(predicate=QUDT.hasUnit))
+        units = list(graph.objects(predicate=IAO["0000039"]))
         assert all("Extension" not in str(u) for u in units)
 
     def test_custom_root_type(self, tmp_path):
@@ -352,15 +352,15 @@ class TestMetadata:
         }
         result = QuickMapper(mapping).run(_meta_file(tmp_path))
         g = _flat_graph(result)
-        QUDT = rdflib.Namespace("http://qudt.org/schema/qudt/")
-        units = list(g.objects(predicate=QUDT.hasUnit))
+        IAO = rdflib.Namespace("http://purl.obolibrary.org/obo/IAO_")
+        units = list(g.objects(predicate=IAO["0000039"]))
         assert any(str(u) == "http://qudt.org/vocab/unit/DEG_C" for u in units)
         # rdf:value should carry the numeric literal
         values = list(g.objects(predicate=rdflib.RDF.value))
         assert any(float(v) == 22.5 for v in values)
 
-    def test_unit_column_builtin_alias_resolves_to_iri(self, tmp_path):
-        # "mm/s" is in the built-in alias table → expect qudt:hasUnit with the IRI
+    def test_unit_from_file_builtin_alias_resolves_to_iri(self, tmp_path):
+        # "mm/s" is in the built-in alias table → expect IAO_0000039 with the IRI
         mapping = {
             **_META_MAPPING_BASE,
             "metadata": {
@@ -368,19 +368,19 @@ class TestMetadata:
                 "fields": {
                     "Speed": {
                         "property": "http://example.org/speed",
-                        "unit_column": True,
+                        "unit_from_file": True,
                     }
                 },
             },
         }
         result = QuickMapper(mapping).run(_meta_file(tmp_path))
         g = _flat_graph(result)
-        QUDT = rdflib.Namespace("http://qudt.org/schema/qudt/")
-        unit_iris = list(g.objects(predicate=QUDT.hasUnit))
+        IAO = rdflib.Namespace("http://purl.obolibrary.org/obo/IAO_")
+        unit_iris = list(g.objects(predicate=IAO["0000039"]))
         assert any("MilliM-PER-SEC" in str(u) for u in unit_iris)
 
-    def test_unit_column_unknown_unit_falls_back_to_string(self, tmp_path):
-        # A unit string not in any alias table is stored as a plain qudt:unit literal
+    def test_unit_from_file_unknown_unit_falls_back_to_string(self, tmp_path):
+        # A unit string not in any alias table is stored as a plain rdfs:label literal
         p = tmp_path / "unknown.tsv"
         p.write_text('"Gauge"\t5.0\t"widgets/hour"\n"Col"\n0.0\n', encoding="utf-8")
         mapping = {
@@ -389,15 +389,14 @@ class TestMetadata:
             "metadata": {
                 "rows": 1,
                 "fields": {
-                    "Gauge": {"property": "http://example.org/gauge", "unit_column": True}
+                    "Gauge": {"property": "http://example.org/gauge", "unit_from_file": True}
                 },
             },
         }
         result = QuickMapper(mapping).run(p)
         g = _flat_graph(result)
-        QUDT = rdflib.Namespace("http://qudt.org/schema/qudt/")
-        unit_lits = list(g.objects(predicate=QUDT.unit))
-        assert any(str(u) == "widgets/hour" for u in unit_lits)
+        labels = list(g.objects(predicate=rdflib.RDFS.label))
+        assert any(str(u) == "widgets/hour" for u in labels)
 
     def test_unit_resolutions_reported_in_oold_doc(self, tmp_path):
         mapping = {
@@ -405,7 +404,7 @@ class TestMetadata:
             "metadata": {
                 **_META_MAPPING_BASE["metadata"],
                 "fields": {
-                    "Speed": {"property": "http://example.org/speed", "unit_column": True},
+                    "Speed": {"property": "http://example.org/speed", "unit_from_file": True},
                 },
             },
         }
@@ -422,7 +421,7 @@ class TestMetadata:
             "file": {"skip_rows": 1, "separator": "\t"},
             "metadata": {
                 "rows": 1,
-                "fields": {"Gauge": {"property": "http://example.org/gauge", "unit_column": True}},
+                "fields": {"Gauge": {"property": "http://example.org/gauge", "unit_from_file": True}},
             },
         }
         result = QuickMapper(mapping).run(p)
