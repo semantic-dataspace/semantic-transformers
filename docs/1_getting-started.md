@@ -24,6 +24,15 @@ pip install -e semantic-transformers/
 pip install jupyterlab              # only needed for the interactive notebooks
 ```
 
+To run the test suite and validate all example notebooks in one step:
+
+```bash
+cd semantic-transformers
+./scripts/run_notebooks.sh
+```
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full list of options.
+
 ---
 
 ## Scenario A: supported instrument (e.g. Zwick/Roell tensile test)
@@ -74,7 +83,7 @@ df.head()
 Zwick software versions and machine templates vary. The metadata block may
 have a different row count, different label names, or labels in another language.
 You do not need to edit any Python for this. See the
-[parser README](../parsers/characterization/tensile-test/zwick/README.md)
+[parser README](../parsers/characterization/tensile-test/testxpert_iii/README.md)
 for the config-file approach.
 
 ### Linking to a specimen (optional)

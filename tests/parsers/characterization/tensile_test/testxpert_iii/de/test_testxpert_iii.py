@@ -1,5 +1,5 @@
 """
-Tests for the Zwick/Roell parser.
+Tests for the testXpert III parser (German locale).
 
 Pure unit tests - no schema files, no Transformer, no RDF.
 """
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from semantic_transformers.parsers.characterization.tensile_test.zwick import ZwickParser
+from semantic_transformers.parsers.characterization.tensile_test.testxpert_iii.de import TestXpertIIIParser
 
 
 # ---------------------------------------------------------------------------
@@ -17,7 +17,7 @@ from semantic_transformers.parsers.characterization.tensile_test.zwick import Zw
 
 @pytest.fixture(scope="module")
 def parser():
-    return ZwickParser()
+    return TestXpertIIIParser()
 
 
 @pytest.fixture(scope="module")
@@ -108,7 +108,7 @@ def test_custom_mapping_path(tmp_path, zwick_txt):
     mapping_file = tmp_path / "custom_mapping.json"
     mapping_file.write_text(json.dumps(mapping), encoding="utf-8")
 
-    result = ZwickParser(column_mapping_path=mapping_file).parse(zwick_txt)
+    result = TestXpertIIIParser(column_mapping_path=mapping_file).parse(zwick_txt)
 
     assert result.column_iris["Standardkraft"] == "https://example.org/Force"
     assert result.column_units["Standardkraft"] == "http://qudt.org/vocab/unit/N"
@@ -122,15 +122,15 @@ def test_custom_mapping_path(tmp_path, zwick_txt):
 
 def test_custom_metadata_rows(zwick_txt):
     """metadata_rows=20 (explicit) gives the same result as the default."""
-    default_result  = ZwickParser().parse(zwick_txt)
-    explicit_result = ZwickParser(metadata_rows=20).parse(zwick_txt)
+    default_result  = TestXpertIIIParser().parse(zwick_txt)
+    explicit_result = TestXpertIIIParser(metadata_rows=20).parse(zwick_txt)
     assert explicit_result.simplified_json == default_result.simplified_json
     assert len(explicit_result.timeseries) == len(default_result.timeseries)
 
 
 def test_custom_meta_field_map(zwick_txt):
     """A custom field map with an unknown label yields no fields from it."""
-    result = ZwickParser(
+    result = TestXpertIIIParser(
         meta_field_map={"NonExistentLabel": "my_field"},
         strain_rate_label=None,
     ).parse(zwick_txt)
@@ -140,7 +140,7 @@ def test_custom_meta_field_map(zwick_txt):
 
 def test_strain_rate_label_none(zwick_txt):
     """Setting strain_rate_label=None suppresses strain_rate_unit."""
-    result = ZwickParser(strain_rate_label=None).parse(zwick_txt)
+    result = TestXpertIIIParser(strain_rate_label=None).parse(zwick_txt)
     assert "strain_rate_unit" not in result.simplified_json
 
 
@@ -159,7 +159,7 @@ def test_configure_drives_type_coercion(zwick_txt):
             "strain_rate":   {"type": "number"},
         },
     }
-    p = ZwickParser()
+    p = TestXpertIIIParser()
     p.configure(schema)
     result = p.parse(zwick_txt)
 
@@ -179,7 +179,7 @@ def test_configure_number_field(zwick_txt):
             "temperature": {"type": "number"},
         },
     }
-    p = ZwickParser()
+    p = TestXpertIIIParser()
     p.configure(schema)
     result = p.parse(zwick_txt)
 
@@ -197,7 +197,7 @@ def test_from_config(tmp_path, zwick_txt):
         "  Prüfnorm: test_standard\n",
         encoding="utf-8",
     )
-    result = ZwickParser.from_config(config).parse(zwick_txt)
+    result = TestXpertIIIParser.from_config(config).parse(zwick_txt)
     # Field map in config maps Prüfnorm → test_standard
     assert result.simplified_json["test_standard"] == "ISO 6892-1"
     # strain_rate_label: null → no strain_rate_unit

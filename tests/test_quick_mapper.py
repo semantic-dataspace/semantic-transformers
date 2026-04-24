@@ -264,3 +264,143 @@ class TestFileOptions:
         mapping = {**_MINIMAL_MAPPING, "file": {"separator": ";"}}
         result = QuickMapper(mapping).run(p)
         assert len(result.dataframe) == 2
+
+    def test_skip_after_header_excludes_units_row(self, tmp_path):
+        p = tmp_path / "data.tsv"
+        p.write_text(
+            "Force\tExtension\tTemperature\n"   # header
+            "N\tmm\t°C\n"                        # units row — must be skipped
+            "0.0\t0.0\t22.0\n"
+            "100.0\t1.0\t23.0\n",
+            encoding="utf-8",
+        )
+        mapping = {**_MINIMAL_MAPPING, "file": {"skip_after_header": 1}}
+        result = QuickMapper(mapping).run(p)
+        assert len(result.dataframe) == 2
+        assert result.dataframe["Force"].iloc[0] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Metadata extraction
+# ---------------------------------------------------------------------------
+
+_META_FILE_CONTENT = (
+    '"Norm"\t"ISO 1234"\n'
+    '"Temperature"\t22.5\t"°C"\n'   # °C in third column
+    '"Speed"\t0.1\t"mm/s"\n'
+    '"Force"\t"Extension"\t"Temperature"\n'   # column header row
+    '"N"\t"mm"\t"°C"\n'                  # units row
+    "0.0\t0.0\t22.5\n"
+    "100.0\t1.0\t22.6\n"
+)
+
+_META_MAPPING_BASE = {
+    "columns": {},
+    "file": {"skip_rows": 3, "skip_after_header": 1, "separator": "\t"},
+    "metadata": {"rows": 3},
+}
+
+
+def _meta_file(tmp_path) -> Path:
+    p = tmp_path / "sample.tsv"
+    p.write_text(_META_FILE_CONTENT, encoding="utf-8")
+    return p
+
+
+class TestMetadata:
+    def test_plain_literal_triple(self, tmp_path):
+        mapping = {
+            **_META_MAPPING_BASE,
+            "metadata": {
+                **_META_MAPPING_BASE["metadata"],
+                "fields": {"Norm": {"property": "http://example.org/norm"}},
+            },
+        }
+        result = QuickMapper(mapping).run(_meta_file(tmp_path))
+        g = _flat_graph(result)
+        vals = list(g.objects(predicate=rdflib.URIRef("http://example.org/norm")))
+        assert len(vals) == 1
+        assert str(vals[0]) == "ISO 1234"
+
+    def test_numeric_value_cast_to_float(self, tmp_path):
+        mapping = {
+            **_META_MAPPING_BASE,
+            "metadata": {
+                **_META_MAPPING_BASE["metadata"],
+                "fields": {"Temperature": {"property": "http://example.org/temp"}},
+            },
+        }
+        result = QuickMapper(mapping).run(_meta_file(tmp_path))
+        g = _flat_graph(result)
+        vals = list(g.objects(predicate=rdflib.URIRef("http://example.org/temp")))
+        # plain literal; no unit IRI given, so no blank node
+        assert len(vals) == 1
+        assert float(vals[0]) == 22.5
+
+    def test_unit_iri_creates_blank_node(self, tmp_path):
+        mapping = {
+            **_META_MAPPING_BASE,
+            "metadata": {
+                **_META_MAPPING_BASE["metadata"],
+                "fields": {
+                    "Temperature": {
+                        "property": "http://example.org/temp",
+                        "unit": "http://qudt.org/vocab/unit/DEG_C",
+                    }
+                },
+            },
+        }
+        result = QuickMapper(mapping).run(_meta_file(tmp_path))
+        g = _flat_graph(result)
+        QUDT = rdflib.Namespace("http://qudt.org/schema/qudt/")
+        units = list(g.objects(predicate=QUDT.hasUnit))
+        assert any(str(u) == "http://qudt.org/vocab/unit/DEG_C" for u in units)
+        # rdf:value should carry the numeric literal
+        values = list(g.objects(predicate=rdflib.RDF.value))
+        assert any(float(v) == 22.5 for v in values)
+
+    def test_unit_column_reads_unit_from_file(self, tmp_path):
+        mapping = {
+            **_META_MAPPING_BASE,
+            "metadata": {
+                **_META_MAPPING_BASE["metadata"],
+                "fields": {
+                    "Speed": {
+                        "property": "http://example.org/speed",
+                        "unit_column": True,
+                    }
+                },
+            },
+        }
+        result = QuickMapper(mapping).run(_meta_file(tmp_path))
+        g = _flat_graph(result)
+        QUDT = rdflib.Namespace("http://qudt.org/schema/qudt/")
+        unit_lits = list(g.objects(predicate=QUDT.unit))
+        assert any(str(u) == "mm/s" for u in unit_lits)
+
+    def test_oold_doc_metadata_key_present(self, tmp_path):
+        mapping = {
+            **_META_MAPPING_BASE,
+            "metadata": {
+                **_META_MAPPING_BASE["metadata"],
+                "fields": {"Norm": {"property": "http://example.org/norm"}},
+            },
+        }
+        result = QuickMapper(mapping).run(_meta_file(tmp_path))
+        assert "Norm" in result.oold_doc["metadata"]
+        assert result.oold_doc["metadata"]["Norm"]["value"] == "ISO 1234"
+
+    def test_oold_doc_metadata_empty_when_no_config(self, tmp_path):
+        result = QuickMapper(_MINIMAL_MAPPING).run(_write_csv(tmp_path, _SAMPLE_DF))
+        assert result.oold_doc["metadata"] == {}
+
+    def test_missing_label_silently_skipped(self, tmp_path):
+        mapping = {
+            **_META_MAPPING_BASE,
+            "metadata": {
+                **_META_MAPPING_BASE["metadata"],
+                "fields": {"DoesNotExist": {"property": "http://example.org/x"}},
+            },
+        }
+        result = QuickMapper(mapping).run(_meta_file(tmp_path))
+        assert result.oold_doc["metadata"] == {}

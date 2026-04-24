@@ -4,25 +4,25 @@ Transformer: parser output → OO-LD → RDF + DataFrame.
 Usage: shorthand (recommended)
 --------------------------------
     from semantic_transformers import Transformer
-    from zwick_parser import ZwickParser
+    from semantic_transformers.parsers.characterization.tensile_test.testxpert_iii import TestXpertIIIParser
 
     # Pass the schema folder; all three file paths are derived automatically.
     # Works with a local path or a GitHub tree URL:
     transformer = Transformer(
-        parser           = ZwickParser(),
+        parser           = TestXpertIIIParser(),
         semantic_schema  = "https://github.com/org/semantic-schemas/tree/main/schemas/domain/Ontology/",
     )
 
     # Or for a locally cloned schema repository:
     transformer = Transformer(
-        parser           = ZwickParser(),
+        parser           = TestXpertIIIParser(),
         semantic_schema  = Path("../semantic-schemas/schemas/domain/Ontology/"),
     )
 
 Usage: explicit paths (full control / non-standard layouts)
 -------------------------------------------------------------
     transformer = Transformer(
-        parser       = ZwickParser(),
+        parser       = TestXpertIIIParser(),
         jsonata      = "specs/transform.simplified.jsonata",
         oold_schema  = "specs/schema.oold.yaml",
         input_schema = "specs/schema.simplified.json",  # optional

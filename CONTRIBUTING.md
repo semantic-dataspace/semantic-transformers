@@ -64,6 +64,17 @@ See [docs/2_adding-a-parser.md](docs/2_adding-a-parser.md) for a step-by-step gu
 
 ### 3. Run the tests locally
 
+The `scripts/run_notebooks.sh` script is the single entry point for running
+both the test suite and the example notebooks:
+
+```bash
+./scripts/run_notebooks.sh            # run tests + notebooks
+./scripts/run_notebooks.sh --tests    # run only pytest
+./scripts/run_notebooks.sh --notebooks  # run only notebooks (via nbmake)
+```
+
+You can also call pytest directly for more control:
+
 **Run all tests:**
 
 ```bash
@@ -79,7 +90,7 @@ pytest tests/parsers/
 **Run tests for a specific parser:**
 
 ```bash
-pytest tests/parsers/characterization/tensile-test/zwick/
+pytest tests/parsers/characterization/tensile-test/testxpert_iii/
 ```
 
 **Run with verbose output:**
@@ -113,24 +124,16 @@ readable documentation. After changing a parser or the library, re-execute all
 notebooks in-place to update the stored outputs before committing:
 
 ```bash
-find docs -name "*.ipynb" ! -path "*/.ipynb_checkpoints/*" \
-  | xargs jupyter nbconvert \
-      --to notebook \
-      --execute \
-      --inplace \
-      --ExecutePreprocessor.timeout=300
+./scripts/run_notebooks.sh --refresh
 ```
 
-Run this from the repository root. Commit the resulting `*.ipynb` changes
-together with any code changes so that the rendered output on GitHub stays
-in sync.
+Commit the resulting `*.ipynb` changes together with any code changes so that
+the rendered output on GitHub stays in sync.
 
 **Tip:** To refresh a single notebook only, pass its path directly:
 
 ```bash
-jupyter nbconvert --to notebook --execute --inplace \
-    --ExecutePreprocessor.timeout=300 \
-    docs/3_quickstart-mapping.ipynb
+./scripts/run_notebooks.sh docs/3_quickstart-mapping.ipynb
 ```
 
 ### 6. Code style and linting
@@ -163,7 +166,7 @@ Add an entry under a new section (e.g., `## [Unreleased]`) describing your chang
 ## [Unreleased]
 
 ### Added
-- New ZwickParser variant for binary .zwick files
+- New TestXpertIIIParser variant for binary .zwick files
 - Support for multi-line metadata in CSV headers
 
 ### Fixed
@@ -174,7 +177,7 @@ When the package is released, `[Unreleased]` becomes the new version number.
 
 If your change affects schema compatibility (new fields mapped, new schema version
 tested), also update the parser's own `CHANGELOG.md` — the compact compatibility
-table inside the parser folder (e.g. `parsers/characterization/tensile_test/zwick/CHANGELOG.md`).
+table inside the instrument folder (e.g. `parsers/characterization/tensile_test/testxpert_iii/CHANGELOG.md`).
 This is separate from the package-level changelog and records only which parser
 version was tested against which schema version.
 

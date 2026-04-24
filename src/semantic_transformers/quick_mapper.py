@@ -24,12 +24,31 @@ Mapping config format
 
     # file reading options (all optional)
     file:
-      format:    auto       # auto | csv | tsv | excel | parquet | json
-      separator: ","        # csv/tsv only; sniffed when omitted
-      skip_rows: 0          # rows to skip before the header row
-      header_row: 0         # which row (after skipping) contains column names
-      encoding:  utf-8
-      sheet:     0          # Excel only: sheet name or 0-based index
+      format:            auto   # auto | csv | tsv | excel | parquet | json
+      separator:         ","    # csv/tsv/txt only; sniffed when omitted
+      skip_rows:         0      # rows to skip before the header row
+      skip_after_header: 0      # rows to skip right after the header (e.g. a units row)
+      header_row:        0      # which row (after skipping) contains column names
+      encoding:          utf-8
+      sheet:             0      # Excel only: sheet name or 0-based index
+
+    # metadata extraction — for files that have a header block before the data
+    metadata:
+      rows: 20           # number of leading metadata rows
+      fields:
+        "My label":
+          property: "https://example.org/vocab/myProp"    # ontology property IRI
+          # value becomes a plain literal (string or float)
+
+        "Label with known unit":
+          property: "https://example.org/vocab/temperature"
+          unit: "http://qudt.org/vocab/unit/DEG_C"        # QUDT unit IRI
+          # value and unit are stored as a value/unit pair
+
+        "Label with file unit":
+          property: "https://example.org/vocab/speed"
+          unit_column: true     # read unit string from the row's third column
+          # value and unit are stored as a value/unit pair
 
     # column annotations (only annotated columns get ontology triples)
     columns:
@@ -79,8 +98,8 @@ _DEFAULT_BASE      = "https://example.org/datasets/"
 class QuickMapper:
     """
     Converts any tabular file into an RDF graph using a lightweight YAML
-    mapping config.  Returns a :class:`ConversionResult` so it is a drop-in
-    companion to :class:`Converter`.
+    mapping config.  Returns a :class:`TransformResult` so it is a drop-in
+    companion to :class:`Transformer`.
 
     Parameters
     ----------
@@ -110,13 +129,29 @@ class QuickMapper:
             Same type as :meth:`Transformer.run`: graph, oold_doc, dataframe,
             column_iris, column_units.
         """
-        path   = Path(file_path)
-        config = {**self._config, **overrides}
+        path     = Path(file_path)
+        config   = {**self._config, **overrides}
+        file_cfg = dict(config.get("file", {}))
 
-        # ── 1. Read the file into a DataFrame ────────────────────────
-        df = self._read_file(path, config.get("file", {}))
+        # Sniff separator once; share between metadata read and data read.
+        if "separator" not in file_cfg and _detect_format(path) in ("csv", "tsv", "txt"):
+            file_cfg["separator"] = _sniff_separator(path, file_cfg.get("encoding", "utf-8"))
 
-        # ── 2. Collect column annotations ────────────────────────────
+        # ── 1. Extract metadata rows (if configured) ──────────────────
+        metadata_cfg = config.get("metadata", {})
+        meta_fields  = metadata_cfg.get("fields", {})
+        meta_raw: dict[str, tuple[str, str]] = {}
+        if meta_fields:
+            n_meta = metadata_cfg.get("rows", 0)
+            if n_meta:
+                meta_sep = metadata_cfg.get("separator") or file_cfg.get("separator") or "\t"
+                meta_enc = metadata_cfg.get("encoding") or file_cfg.get("encoding", "utf-8")
+                meta_raw = self._extract_metadata_raw(path, n_meta, meta_sep, meta_enc)
+
+        # ── 2. Read the file into a DataFrame ────────────────────────
+        df = self._read_file(path, file_cfg)
+
+        # ── 3. Collect column annotations ────────────────────────────
         columns_cfg  = config.get("columns", {})
         column_iris  = {
             col: cfg["iri"]
@@ -129,13 +164,13 @@ class QuickMapper:
             if "unit" in cfg
         }
 
-        # ── 3. Build the RDF graph ────────────────────────────────────
+        # ── 4. Build the RDF graph ────────────────────────────────────
         root_type  = config.get("root_type", _DEFAULT_ROOT_TYPE)
         label      = config.get("label", path.stem)
         base       = config.get("base", _DEFAULT_BASE)
         dataset_id = rdflib.URIRef(base + path.stem)
 
-        g = rdflib.Dataset()
+        g   = rdflib.Dataset()
         ctx = g.default_graph
 
         ctx.add((dataset_id, _RDF.type,   rdflib.URIRef(root_type)))
@@ -143,6 +178,12 @@ class QuickMapper:
         ctx.add((dataset_id, _DCT.title,  rdflib.Literal(label)))
         ctx.add((dataset_id, _DCT.source, rdflib.Literal(str(path.name))))
 
+        # Metadata triples
+        extracted_meta: dict = {}
+        if meta_fields and meta_raw:
+            extracted_meta = self._add_metadata_triples(ctx, dataset_id, meta_raw, meta_fields)
+
+        # Column descriptor triples
         for col_name, col_iri in column_iris.items():
             safe    = col_name.replace(" ", "_")
             col_uri = rdflib.URIRef(str(dataset_id) + "/" + safe)
@@ -155,13 +196,14 @@ class QuickMapper:
             if unit_iri:
                 ctx.add((col_uri, _QUDT.hasUnit, rdflib.URIRef(unit_iri)))
 
-        # ── 4. Build a lightweight summary doc ───────────────────────
+        # ── 5. Build a lightweight summary doc ───────────────────────
         oold_doc = {
-            "id":         str(dataset_id),
-            "type":       root_type,
-            "label":      label,
-            "source":     str(path.name),
-            "columns":    {
+            "id":       str(dataset_id),
+            "type":     root_type,
+            "label":    label,
+            "source":   str(path.name),
+            "metadata": extracted_meta,
+            "columns":  {
                 col: {"iri": iri, **({"unit": column_units[col]} if col in column_units else {})}
                 for col, iri in column_iris.items()
             },
@@ -179,6 +221,74 @@ class QuickMapper:
     # Private helpers
     # ------------------------------------------------------------------
 
+    def _extract_metadata_raw(
+        self, path: Path, n_rows: int, sep: str, enc: str
+    ) -> dict[str, tuple[str, str]]:
+        """Read first n_rows and return {label: (value_str, unit_str)}."""
+        result: dict[str, tuple[str, str]] = {}
+        with path.open(encoding=enc) as fh:
+            reader = _csv.reader(fh, delimiter=sep, quotechar='"')
+            for i, row in enumerate(reader):
+                if i >= n_rows:
+                    break
+                if not row:
+                    continue
+                label = row[0].strip()
+                value = row[1].strip() if len(row) > 1 else ""
+                unit  = row[2].strip() if len(row) > 2 else ""
+                result[label] = (value, unit)
+        return result
+
+    def _add_metadata_triples(
+        self,
+        ctx: rdflib.Graph,
+        root: rdflib.URIRef,
+        meta_raw: dict[str, tuple[str, str]],
+        fields_cfg: dict,
+    ) -> dict:
+        """
+        Add metadata triples to ctx.  Returns extracted {label: ...} for oold_doc.
+
+        - Plain value  → ``<root> <property> <literal>``
+        - Value + unit → ``<root> <property> [rdf:value <v>; qudt:hasUnit <unit_iri>]``
+                      or ``<root> <property> [rdf:value <v>; qudt:unit "unit_str"]``
+        """
+        extracted: dict = {}
+        for label, field_cfg in fields_cfg.items():
+            if label not in meta_raw:
+                continue
+            value_str, file_unit = meta_raw[label]
+            if not value_str:
+                continue
+
+            pred_iri = field_cfg.get("property") or field_cfg.get("iri")
+            if not pred_iri:
+                continue
+            pred = rdflib.URIRef(pred_iri)
+
+            try:
+                lit = rdflib.Literal(float(value_str))
+            except ValueError:
+                lit = rdflib.Literal(value_str)
+
+            unit_iri      = field_cfg.get("unit")
+            use_file_unit = field_cfg.get("unit_column", False) and file_unit
+
+            if unit_iri or use_file_unit:
+                bn = rdflib.BNode()
+                ctx.add((root, pred, bn))
+                ctx.add((bn, _RDF.value, lit))
+                if unit_iri:
+                    ctx.add((bn, _QUDT.hasUnit, rdflib.URIRef(unit_iri)))
+                else:
+                    ctx.add((bn, _QUDT.unit, rdflib.Literal(file_unit)))
+                extracted[label] = {"value": value_str, "unit": unit_iri or file_unit}
+            else:
+                ctx.add((root, pred, lit))
+                extracted[label] = {"value": value_str}
+
+        return extracted
+
     def _read_file(self, path: Path, file_cfg: dict):
         """Read *path* into a pandas DataFrame using *file_cfg* hints."""
         import pandas as pd
@@ -195,12 +305,21 @@ class QuickMapper:
             sep = file_cfg.get("separator")
             if sep is None:
                 sep = _sniff_separator(path, enc)
+
+            skip_after = file_cfg.get("skip_after_header", 0)
+            if skip_after:
+                # Build an explicit skip list: metadata rows + unit rows after header.
+                skip_list = list(range(int(skip))) + [
+                    int(skip) + int(header) + i + 1 for i in range(int(skip_after))
+                ]
+                return pd.read_csv(path, sep=sep, skiprows=skip_list, header=0, encoding=enc)
+
             return pd.read_csv(
                 path,
-                sep       = sep,
-                skiprows  = skip,
-                header    = header,
-                encoding  = enc,
+                sep      = sep,
+                skiprows = skip,
+                header   = header,
+                encoding = enc,
             )
 
         if fmt == "excel":

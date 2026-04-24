@@ -1,57 +1,45 @@
 """
-Parser for Zwick/Roell tensile test CSV files.
+Parser for Zwick/Roell testXpert III tensile test exports.
 
 File format
 -----------
-The Zwick software exports a tab-separated file with two sections:
+The testXpert III software exports a tab-separated file with two sections:
 
-  Rows 1–20   Metadata block: each row is  "label" \\t value [\\t "unit"]
-              The label is always a quoted German string.
+  Rows 1–N    Metadata block: each row is  "label" \\t value [\\t "unit"]
+              The label is a quoted string (language depends on the software locale).
               The value is either a quoted string or a bare number.
 
-  Row 21      Column headers  (quoted, tab-separated)
-  Row 22      Column units    (quoted, tab-separated)
-  Rows 23+    Numeric data    (bare floats, tab-separated)
+  Row N+1     Column headers  (quoted, tab-separated)
+  Row N+2     Column units    (quoted, tab-separated)
+  Rows N+3+   Numeric data    (bare floats, tab-separated)
+
+This base class contains no locale-specific strings.  The metadata label
+strings, unit-field mapping, and column_mapping.json all vary by export
+language and are provided by locale subclasses (e.g. ``de.TestXpertIIIParser``).
 
 Output
 ------
 Produces a ParseResult where:
   simplified_json  maps the metadata to the tensile-test/TTO simplified schema
-  timeseries       is a pandas DataFrame with the original German column names
+  timeseries       is a pandas DataFrame with the original column names
   column_iris      maps each column to its TTO class IRI  (from column_mapping.json)
   column_units     maps each column to its QUDT unit IRI  (from column_mapping.json)
 
 Schema-driven type coercion
 ---------------------------
-ZwickParser implements SchemaAwareParser so that when it is used with a
+TestXpertIIIParser implements SchemaAwareParser so that when it is used with a
 Transformer that has an input_schema (or semantic_schema), the Transformer
 automatically calls configure(schema) to share the loaded schema dict.
 The parser then reads the ``type`` for each field and casts accordingly
 (``"number"`` / ``"integer"`` → float/int, ``"string"`` → str).
 
-This means adding a new numeric or string field to the schema requires no code
-change in the parser; only a new entry in meta_field_map is needed.  No schema path
-needs to be passed to the parser directly.
-
 Adapting to file variants
 -------------------------
-If your Zwick software version or machine template produces a different number
-of metadata rows, uses different labels, or is localised to another language,
-point the parser at a YAML config file instead of changing Python code:
+If your testXpert III export has a different metadata row count, different
+label names, or a different language, pass the locale-specific values as
+constructor arguments or via a YAML config file:
 
-    ZwickParser.from_config("my_parser_config.yaml")
-
-The config file supports these keys (all optional):
-
-    metadata_rows: 15               # rows before the column-header row
-    strain_rate_label: null         # set to null to skip
-    meta_field_map:
-      Temperature: temperature
-      Norm:        test_standard
-
-Alternatively, pass the same values directly as keyword arguments:
-
-    ZwickParser(metadata_rows=15, strain_rate_label=None)
+    TestXpertIIIParser.from_config("my_parser_config.yaml")
 
 For a completely different file structure, copy this file and override
 _parse_metadata() and _parse_timeseries().  The Transformer and the schema
@@ -73,40 +61,18 @@ import pandas as pd
 from semantic_transformers import ParseResult
 from semantic_transformers.parser import SchemaAwareParser
 
-# Default number of leading rows that are metadata before the column-header row.
 _DEFAULT_METADATA_ROWS = 20
 
-# Default mapping of metadata labels to simplified JSON field names.
-#
-# Keys are the German metadata labels as exported by Zwick software.
-# Values are field names defined in schema.simplified.json.
-# Adding a new field to the schema only requires a new entry here; no other
-# code changes are needed; the Transformer shares the loaded schema via
-# configure() so types are always read from the current schema version.
-_DEFAULT_META_FIELD_MAP: dict[str, str] = {
-    "Prüfnorm":              "test_standard",
-    "Temperatur":            "temperature",
-    "Prüfgeschwindigkeit":   "strain_rate",
-    "Messlänge Standardweg": "gauge_length",
-    "Vorkraft":              "preload",
-}
 
-# Labels whose unit column is extracted into a companion field.
-# Maps: CSV label → (simplified JSON unit field, fallback unit string)
-_DEFAULT_UNIT_FIELD_MAP: dict[str, tuple[str, str]] = {
-    "Prüfgeschwindigkeit":   ("strain_rate_unit",   "mm/s"),
-    "Messlänge Standardweg": ("gauge_length_unit",  "mm"),
-    "Vorkraft":              ("preload_unit",        "MPa"),
-}
-
-# Kept for backwards compatibility with from_config() callers that set strain_rate_label.
-_STRAIN_RATE_LABEL = "Prüfgeschwindigkeit"
-
-
-class ZwickParser(SchemaAwareParser):
+class TestXpertIIIParser(SchemaAwareParser):
     """
-    Reads a Zwick/Roell tensile test export and returns a ParseResult
-    compatible with the ``characterization/tensile-test/TTO`` schema.
+    Reads a Zwick/Roell testXpert III tensile test export and returns a
+    ParseResult compatible with the ``characterization/tensile-test/TTO`` schema.
+
+    This base class is locale-agnostic.  Use a locale subclass (e.g.
+    ``testxpert_iii.de.TestXpertIIIParser``) for a ready-to-use configuration,
+    or pass *meta_field_map*, *unit_field_map*, and *column_mapping_path*
+    directly to configure a custom locale.
 
     When used with ``Transformer``, the Transformer automatically calls
     ``configure(schema)`` to share the loaded input schema; no schema path
@@ -115,23 +81,22 @@ class ZwickParser(SchemaAwareParser):
     Parameters
     ----------
     column_mapping_path:
-        Path to the ``column_mapping.json`` file that lives next to this
-        parser.  Pass ``None`` to use the default file next to this module.
+        Path to a ``column_mapping.json`` file mapping column names to
+        ontology class IRIs and QUDT unit IRIs.  Required unless a locale
+        subclass provides a default.
     metadata_rows:
         Number of leading rows that form the metadata block before the
         column-header row.  Default: 20.
     meta_field_map:
         Mapping of metadata label strings to simplified JSON field names.
-        Overrides the default German-label map when provided.
     unit_field_map:
         Mapping from CSV label to ``(simplified_field_name, fallback_unit)``.
         For each listed label the unit column of that metadata row is read and
-        stored in the simplified JSON under *simplified_field_name*.  Overrides
-        the default map when provided.
-    strain_rate_label:
-        Deprecated.  Use *unit_field_map* instead.  When provided and not
-        present in *unit_field_map*, a ``("strain_rate_unit", "mm/s")`` entry
-        is added automatically for backwards compatibility.
+        stored in the simplified JSON under *simplified_field_name*.
+    date_label:
+        Metadata label whose value is an Excel serial-number date.  When set,
+        the value is converted to an ISO 8601 string and stored as
+        ``test_date`` in the simplified JSON.
     """
 
     def __init__(
@@ -141,28 +106,23 @@ class ZwickParser(SchemaAwareParser):
         metadata_rows: int = _DEFAULT_METADATA_ROWS,
         meta_field_map: Optional[dict[str, str]] = None,
         unit_field_map: Optional[dict[str, tuple[str, str]]] = None,
-        strain_rate_label: Optional[str] = _STRAIN_RATE_LABEL,
+        date_label: Optional[str] = None,
     ) -> None:
         if column_mapping_path is None:
-            column_mapping_path = Path(__file__).parent / "column_mapping.json"
+            raise ValueError(
+                "column_mapping_path is required for the base TestXpertIIIParser. "
+                "Use a locale subclass (e.g. testxpert_iii.de.TestXpertIIIParser) "
+                "or pass column_mapping_path explicitly."
+            )
 
         mapping = json.loads(column_mapping_path.read_text(encoding="utf-8"))
         self._col_iris:  dict[str, str] = {m["key"]: m["iri"]      for m in mapping}
         self._col_units: dict[str, str] = {m["key"]: m["unit_iri"] for m in mapping}
 
         self._metadata_rows  = metadata_rows
-        self._meta_field_map = meta_field_map if meta_field_map is not None else _DEFAULT_META_FIELD_MAP
-
-        if unit_field_map is not None:
-            self._unit_field_map: dict[str, tuple[str, str]] = unit_field_map
-        else:
-            self._unit_field_map = dict(_DEFAULT_UNIT_FIELD_MAP)
-            # Backwards-compat: honour a custom strain_rate_label if given.
-            if strain_rate_label and strain_rate_label != _STRAIN_RATE_LABEL:
-                self._unit_field_map[strain_rate_label] = ("strain_rate_unit", "mm/s")
-            elif strain_rate_label is None:
-                self._unit_field_map.pop(_STRAIN_RATE_LABEL, None)
-
+        self._meta_field_map = meta_field_map if meta_field_map is not None else {}
+        self._unit_field_map = unit_field_map if unit_field_map is not None else {}
+        self._date_label     = date_label
         self._field_types: dict[str, str] = {}
 
     # ------------------------------------------------------------------
@@ -187,24 +147,17 @@ class ZwickParser(SchemaAwareParser):
         cls,
         config_path: str | Path,
         column_mapping_path: Optional[Path] = None,
-    ) -> "ZwickParser":
+    ) -> "TestXpertIIIParser":
         """
-        Create a ZwickParser from a YAML config file.
+        Create a parser from a YAML config file.
 
         Supported config keys (all optional)
         -------------------------------------
         metadata_rows (int):      rows before the column-header row
-        strain_rate_label (str):  set to null to disable (deprecated, prefer unit_field_map)
         meta_field_map (dict):    label → field_name
         unit_field_map (dict):    label → {field: name, fallback: unit}
 
-        Example
-        -------
-        metadata_rows: 15
-        strain_rate_label: null
-        meta_field_map:
-          Temperature: temperature
-          Norm: test_standard
+        Locale subclasses may support additional keys (e.g. ``strain_rate_label``).
         """
         cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8")) or {}
 
@@ -219,13 +172,19 @@ class ZwickParser(SchemaAwareParser):
                 for label, entry in cfg["unit_field_map"].items()
             }
 
-        return cls(
+        kwargs: dict = dict(
             column_mapping_path = column_mapping_path,
             metadata_rows       = cfg.get("metadata_rows", _DEFAULT_METADATA_ROWS),
             meta_field_map      = meta_field_map,
             unit_field_map      = unit_field_map,
-            strain_rate_label   = cfg.get("strain_rate_label", _STRAIN_RATE_LABEL),
         )
+        # Pass these only when explicitly set in the config so locale subclass
+        # defaults are not overwritten by a missing key.
+        for key in ("strain_rate_label", "date_label"):
+            if key in cfg:
+                kwargs[key] = cfg[key]
+
+        return cls(**kwargs)
 
     # ------------------------------------------------------------------
 
@@ -266,7 +225,7 @@ class ZwickParser(SchemaAwareParser):
     @staticmethod
     def _excel_serial_to_iso(value_str: str) -> str | None:
         """
-        Convert a Zwick/Excel date serial number to an ISO 8601 datetime string.
+        Convert an Excel date serial number to an ISO 8601 datetime string.
 
         Excel counts days from 1899-12-30 (the effective epoch after its
         off-by-one leap-year bug).  The fractional part encodes the time of day.
@@ -309,10 +268,8 @@ class ZwickParser(SchemaAwareParser):
         # Derive test_name from the file stem (user can override via transformer.run).
         simplified["test_name"] = path.stem
 
-        # Parse the test date (Datum/Uhrzeit) from its Excel serial-number format.
-        if "Datum/Uhrzeit" in meta:
-            date_str = meta["Datum/Uhrzeit"][0].strip()
-            iso_dt = self._excel_serial_to_iso(date_str)
+        if self._date_label and self._date_label in meta:
+            iso_dt = self._excel_serial_to_iso(meta[self._date_label][0].strip())
             if iso_dt:
                 simplified["test_date"] = iso_dt
 

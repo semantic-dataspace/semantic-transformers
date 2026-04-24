@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-24
+
+### Breaking
+
+- `ZwickParser` renamed to `TestXpertIIIParser`; import path changes from
+  `semantic_transformers.parsers.characterization.tensile_test.zwick` to
+  `semantic_transformers.parsers.characterization.tensile_test.testxpert_iii`.
+  Update any existing imports.
+- `QuickMapper` metadata field config: the `predicate` key is renamed to
+  `property`. Update any existing YAML or dict configs that use `predicate:`.
+
+### Added
+
+- `scripts/run_notebooks.sh` — single entry point to run the test suite,
+  validate notebooks, or refresh notebook outputs in-place.
+
+### Changed
+
+- `QuickMapper` quickstart notebook revised: added a conceptual "what does a
+  measurement file look like?" section; clarified `skip_rows`,
+  `skip_after_header`, and `unit_column`; removed internal variable names
+  (`_cwd`, `_candidates`) from the file-path cell; removed em-dash constructions
+  throughout.
+- `CONTRIBUTING.md` and `docs/1_getting-started.md` updated to reference
+  `scripts/run_notebooks.sh` for running tests and refreshing notebooks.
+
 ## [0.1.5] - 2026-04-10
 
 ### Added (`ZwickParser`)

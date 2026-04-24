@@ -31,11 +31,11 @@ meta_field_map:
 ```
 
 ```python
-from semantic_transformers.parsers.characterization.tensile_test.zwick import ZwickParser
+from semantic_transformers.parsers.characterization.tensile_test.testxpert_iii import TestXpertIIIParser
 from semantic_transformers import Transformer
 
 transformer = Transformer(
-    parser          = ZwickParser.from_config("parser_config.yaml"),
+    parser          = TestXpertIIIParser.from_config("parser_config.yaml"),
     semantic_schema = "/path/to/semantic-schemas/schemas/characterization/tensile-test/TTO/",
 )
 result = transformer.run("my_file.txt")
@@ -46,7 +46,7 @@ result = transformer.run("my_file.txt")
 Pass the same settings directly as keyword arguments when constructing the parser:
 
 ```python
-ZwickParser(
+TestXpertIIIParser(
     metadata_rows     = 15,
     strain_rate_label = None,
     meta_field_map    = {
@@ -60,7 +60,7 @@ If you also need to use a custom `column_mapping.json` (to remap or rename
 measurement columns), pass it as the first argument:
 
 ```python
-ZwickParser(
+TestXpertIIIParser(
     "/path/to/my_column_mapping.json",
     metadata_rows = 15,
 )
@@ -77,20 +77,29 @@ repository.
 ### Folder structure
 
 ```text
-src/semantic_transformers/parsers/<domain>/<specialisation>/<machine>/
-  <machine>_parser.py  Reads the instrument file → ParseResult
-  column_mapping.json  Maps column names to ontology IRIs and QUDT units
-  README.md            Quick-start, current schema compatibility, known limitations
-  CHANGELOG.md         Schema compatibility history (which parser version works with which schema version)
+src/semantic_transformers/parsers/<domain>/<specialisation>/<instrument>/
+  __init__.py    Re-exports the parser class (defaults to the primary locale)
+  parser.py      Language-agnostic parsing logic → ParseResult
+  README.md      Format specification, quick start, schema compatibility
+  CHANGELOG.md   Schema compatibility history
+  <lang>/        One subfolder per export language (e.g. de/, en/)
+    __init__.py        Re-exports the parser class pre-configured for this locale
+    column_mapping.json  Maps locale-specific column names to ontology IRIs and QUDT units
 ```
+
+`parser.py` contains the parsing logic shared across all locales. Language
+subfolders hold only locale-specific data: `column_mapping.json` whose keys
+are the instrument-generated column names, which vary by locale. `README.md`
+and `CHANGELOG.md` live at the instrument level, not inside locale subfolders.
 
 The folder path mirrors the `schemas/` tree in `semantic-schemas`, but
 without the ontology subfolder. Directory names must use underscores (not
 hyphens) to be valid Python identifiers. For example:
 
 ```text
-schemas/characterization/tensile-test/TTO/                                  ← schema
-src/semantic_transformers/parsers/characterization/tensile_test/zwick/      ← parser
+schemas/characterization/tensile-test/TTO/                                     ← schema
+src/semantic_transformers/parsers/characterization/tensile_test/testxpert_iii/ ← parser
+src/semantic_transformers/parsers/characterization/tensile_test/testxpert_iii/de/ ← German locale data
 ```
 
 ### Step 1: choose the target schema
@@ -102,16 +111,16 @@ simplified JSON your parser produces must match the fields in that schema's
 ### Step 2: create the folder
 
 ```bash
-mkdir -p src/semantic_transformers/parsers/<domain>/<specialisation>/<machine>/
+mkdir -p src/semantic_transformers/parsers/<domain>/<specialisation>/<instrument>/<lang>/
 ```
 
 ### Step 3: write the parser
 
-Copy the Zwick parser as a starting point:
+Copy the testXpert III parser as a starting point:
 
 ```bash
-cp src/semantic_transformers/parsers/characterization/tensile_test/zwick/zwick_parser.py \
-   src/semantic_transformers/parsers/<domain>/<specialisation>/<machine>/<machine>_parser.py
+cp src/semantic_transformers/parsers/characterization/tensile_test/testxpert_iii/parser.py \
+   src/semantic_transformers/parsers/<domain>/<specialisation>/<instrument>/parser.py
 ```
 
 Open the copy and adjust `_parse_metadata()` and `_parse_timeseries()` for
@@ -186,25 +195,30 @@ the DataFrame.
 
 ### Step 5: write README.md and CHANGELOG.md
 
-**README.md** — use the Zwick README as a template. Include:
+Place both files in the instrument folder (e.g. `testxpert_iii/`), not inside
+a locale subfolder.
+
+**README.md** — use the testXpert III README as a template. Include:
 
 - **Schema compatibility**: the `semantic-schemas` path and the current tested version.
   Update this table whenever you re-test against a newer schema release.
   Link to `CHANGELOG.md` for the full history.
 - **Supported instruments**: brand, models, software version, export format.
-- **File layout**: what the parser expects to find in the file.
+- **File format**: the format spec (section layout, row structure).
+- **Locale variants**: one row per `<lang>/` subfolder, listing what column names
+  that locale exports.
 - **Quick start**: a minimal code snippet.
 - **Known limitations**.
 
 **CHANGELOG.md** — a compact compatibility table mapping parser versions to schema
-versions (use the Zwick CHANGELOG as a template). This is the authoritative record
-of which parser release was tested against which schema release. It is not shipped
-in the PyPI wheel; it is for contributors and schema maintainers.
+versions (use the testXpert III CHANGELOG as a template). This is the authoritative
+record of which parser release was tested against which schema release. It is not
+shipped in the PyPI wheel; it is for contributors and schema maintainers.
 
 ### Step 6: test end-to-end
 
 ```python
-from semantic_transformers.parsers.<domain>.<specialisation>.<machine> import MyParser
+from semantic_transformers.parsers.<domain>.<specialisation>.<instrument> import MyParser
 from semantic_transformers import Transformer
 
 transformer = Transformer(
@@ -235,7 +249,7 @@ if not conforms:
 
 Open a pull request with:
 
-- The four files in the correct folder (`<machine>_parser.py`, `column_mapping.json`, `README.md`, `CHANGELOG.md`)
+- `parser.py` in the instrument folder, plus `column_mapping.json`, `README.md`, `CHANGELOG.md` in the language subfolder
 - A sample instrument file in `tests/data/` (anonymised if needed)
 - A test module that runs `transformer.run()` on the sample file
 

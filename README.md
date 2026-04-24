@@ -37,7 +37,7 @@ Each parser targets a specific instrument model. The folder path mirrors the
 
 | Schema | Instrument | Import path |
 |---|---|---|
-| `characterization/tensile-test/TTO` | Zwick/Roell (testXpert III) | `semantic_transformers.parsers.characterization.tensile_test.zwick` |
+| `characterization/tensile-test/TTO` | Zwick/Roell (testXpert III) | `semantic_transformers.parsers.characterization.tensile_test.testxpert_iii` |
 
 ## Installation
 

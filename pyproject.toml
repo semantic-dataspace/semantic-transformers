@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "semantic-transformers"
-version = "0.1.5"
+version = "0.2.0"
 description = "Machine-file extractors and transformers for semantic schema pipelines"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -52,11 +52,12 @@ where = ["src"]
 
 # Only ship runtime data (JSON mappings); exclude docs and example files.
 [tool.setuptools.package-data]
-"semantic_transformers.parsers.characterization.tensile_test.zwick" = ["*.json"]
+"semantic_transformers.parsers.characterization.tensile_test.testxpert_iii.de" = ["*.json"]
 
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = [
     "ignore::DeprecationWarning:rdflib.*",
+    "ignore::pytest.PytestCollectionWarning",
 ]

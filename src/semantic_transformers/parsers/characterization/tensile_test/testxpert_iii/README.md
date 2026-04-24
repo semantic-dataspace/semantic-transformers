@@ -1,8 +1,7 @@
-# Parser: Zwick/Roell → characterization/tensile-test/TTO
+# Parser: Zwick/Roell testXpert III
 
-Reads a Zwick/Roell testXpert III export and converts it to the
-`characterization/tensile-test/TTO` simplified schema, ready to be fed into
-a `Transformer`.
+Reads a Zwick/Roell [testXpert III](https://www.zwickroell.com/accessories/testxpert-testing-software/)
+export and produces a `ParseResult` ready to be fed into a `Transformer`.
 
 ## Schema compatibility
 
@@ -19,16 +18,40 @@ For the full compatibility history see [CHANGELOG.md](CHANGELOG.md).
 |---|---|---|---|
 | Zwick/Roell | Z020, Z100, Z250 | testXpert III | Tab-separated text (.TXT), UTF-8 |
 
-## File layout
+## File format
+
+testXpert III exports a tab-separated UTF-8 text file structured as follows:
 
 | Rows | Content |
 |---|---|
-| 1–20 | Metadata block: `"label" \t value [\t "unit"]` (German labels, quoted strings) |
-| 21 | Column headers (quoted, tab-separated) |
-| 22 | Column units (only row 21 labels are used; data units come from `column_mapping.json`) |
-| 23+ | Numeric time-series data |
+| 1–N | Metadata block: `"label" \t value [\t "unit"]` (quoted strings) |
+| N+1 | Column headers (quoted, tab-separated) |
+| N+2 | Column units (quoted; not used by the parser — units come from `column_mapping.json`) |
+| N+3+ | Numeric time-series data (bare floats, tab-separated) |
 
-## Mapped metadata fields
+`N` defaults to 20 in the standard testXpert III template and can be overridden
+via the `metadata_rows` parameter.
+
+Labels and column names are language-dependent (see locale variants below).
+
+## Locale variants
+
+| Locale | Subfolder | Labels |
+|---|---|---|
+| German (default) | `de/` | German (`Prüfnorm`, `Standardkraft`, …) |
+
+Each locale subfolder contains a `column_mapping.json` that maps the
+locale-specific column names exported by testXpert III to TTO class IRIs and
+QUDT unit IRIs.
+
+The default import (`from testxpert_iii import TestXpertIIIParser`) uses the
+German locale.  For an explicit locale import:
+
+```python
+from semantic_transformers.parsers.characterization.tensile_test.testxpert_iii.de import TestXpertIIIParser
+```
+
+## Mapped metadata fields (German locale)
 
 | Exported label | Simplified JSON field | Notes |
 |---|---|---|
@@ -43,11 +66,11 @@ All other metadata rows (institute, operator, machine ID, specimen dimensions, �
 are not mapped: administrative fields do not belong in the test node and specimen
 dimensions belong in the specimen record.
 
-## Mapped time-series columns
+## Mapped time-series columns (German locale)
 
 All six standard columns are annotated with TTO class IRIs and QUDT unit IRIs
-via `column_mapping.json`. The measurement values are not stored in the RDF graph;
-only the column descriptors (class + unit) are.
+via `de/column_mapping.json`. The measurement values are not stored in the RDF
+graph; only the column descriptors (class + unit) are.
 
 | Exported column | TTO class | QUDT unit |
 |---|---|---|
@@ -61,11 +84,11 @@ only the column descriptors (class + unit) are.
 ## Quick start
 
 ```python
-from semantic_transformers.parsers.characterization.tensile_test.zwick import ZwickParser
+from semantic_transformers.parsers.characterization.tensile_test.testxpert_iii import TestXpertIIIParser
 from semantic_transformers import Transformer
 
 transformer = Transformer(
-    parser          = ZwickParser(),
+    parser          = TestXpertIIIParser(),
     semantic_schema = '/path/to/semantic-schemas/schemas/characterization/tensile-test/TTO/',
 )
 
@@ -76,12 +99,12 @@ print(result.dataframe.head())
 ```
 
 For a full walkthrough, see the
-[tensile test CSV notebook](../../../../../semantic-schemas/schemas/characterization/tensile-test/TTO/docs/2_tensile_test_csv_workflow.ipynb).
+[tensile test CSV notebook](../../../../semantic-schemas/schemas/characterization/tensile-test/TTO/docs/2_tensile_test_csv_workflow.ipynb).
 
-## Adapting to your Zwick file variant
+## Adapting to your file variant
 
 If your software version or machine template produces a different header
-length, uses different label names, or is localised to another language, use
+length, uses different label names, or exports in another language, use
 a config YAML instead of editing Python.
 
 Create a `parser_config.yaml` next to your data file:
@@ -106,13 +129,13 @@ unit_field_map:
 Then pass it to `from_config()`:
 
 ```python
-ZwickParser.from_config("parser_config.yaml")
+TestXpertIIIParser.from_config("parser_config.yaml")
 ```
 
 The same settings are available as keyword arguments:
 
 ```python
-ZwickParser(
+TestXpertIIIParser(
     metadata_rows  = 15,
     meta_field_map = {"Temperature": "temperature"},
     unit_field_map = {"Speed": ("strain_rate_unit", "mm/s")},
@@ -120,12 +143,12 @@ ZwickParser(
 ```
 
 For a completely different file structure (different section layout, binary
-format), copy this parser and override `_parse_metadata()` and
+format), copy `parser.py` and override `_parse_metadata()` and
 `_parse_timeseries()`. The `Transformer` and the schema do not need to change.
 See `docs/2_adding-a-parser.md` for the full guide.
 
 ## Known limitations
 
-- Scalar result values (Rp0.2, Rm, A, Z) are not in the Zwick export and must
-  be added separately or computed from the time series.
+- Scalar result values (Rp0.2, Rm, A, Z) are not in the testXpert III export
+  and must be added separately or computed from the time series.
 - Assumes UTF-8 encoding.
