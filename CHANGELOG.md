@@ -267,6 +267,13 @@ accept the new default).
 
 ## [Unreleased]
 
+### Changed
+
+- **testxpert_iii schema compatibility table** updated to reflect the
+  `semantic-schemas` v0.6.0 release: schema versions reset to `0.1.0`
+  (SemVer 0.x pre-release convention), and `characterization/tensile-test/PMDCo`
+  added as a second compatible schema alongside TTO.
+
 ### Planned
 
 - Additional instrument parsers (metallography, microscopy, analysis)

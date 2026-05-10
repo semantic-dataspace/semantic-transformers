@@ -7,7 +7,8 @@ export and produces a `ParseResult` ready to be fed into a `Transformer`.
 
 | Schema | Version | Tested |
 |---|---|---|
-| `characterization/tensile-test/TTO` | **1.1.0** | 2026-04-10 |
+| `characterization/tensile-test/TTO` | **0.1.0** | 2026-05-10 |
+| `characterization/tensile-test/PMDCo` | **0.1.0** | 2026-05-10 |
 
 Update the version and date here whenever you re-test against a newer schema release.
 For the full compatibility history see [CHANGELOG.md](CHANGELOG.md).
