@@ -10,6 +10,7 @@ from .parser import (
     parse_individual_file,
     parse_individual_directory,
     parse_combined_file,
+    _result_entries,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "parse_individual_file",
     "parse_individual_directory",
     "parse_combined_file",
+    "_result_entries",
 ]

@@ -202,8 +202,11 @@ def _parse_individual_block(text: str, index: int) -> IndentationResult:
         except ValueError:
             pass
 
+    m = _RE_SERIAL.search(text)
+    if m:
+        setattr(result, "_instrument_sn", m.group(1).strip())  # keep as string
+
     for pattern, attr in [
-        (_RE_SERIAL,       "_instrument_sn"),
         (_RE_MAX_DEPTH,    "_max_depth"),
         (_RE_MIN_DEPTH,    "_min_depth"),
         (_RE_LOADING_RATE, "_loading_rate"),

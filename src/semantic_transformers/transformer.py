@@ -393,7 +393,7 @@ class Transformer:
                 obo:IAO_0000039 <unit_iri> .        # when a unit applies
         """
         p   = self._timeseries_pattern
-        ctx = g.default_graph
+        ctx = g.default_context
 
         container_type  = rdflib.URIRef(p["container_type"])
         col_pred        = rdflib.URIRef(p["column_predicate"])
