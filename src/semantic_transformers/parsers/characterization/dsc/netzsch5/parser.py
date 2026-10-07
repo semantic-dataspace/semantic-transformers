@@ -21,27 +21,27 @@ DATA COMPARE exports contain two identically named DSC/(µV/mg) columns
 (sample + reference). The parser renames them to _sample and _reference
 so downstream consumers have unique keys.
 
-Unit labels
------------
+Header extraction
+-----------------
+All #KEY: VALUE header fields are parsed and stored in simplified_json.
+For DATA COMPARE exports (two files side-by-side), only the first column
+of values is used (the sample file; the second column is the sapphire reference).
+
+Scalar results
+--------------
 result_unit in the simplified_json results array uses vocabulary labels from
 the measurement-unit vocabulary service (e.g. "Degree Celsius (°C)") — the
 SDK resolves these to QUDT IRIs automatically. No hardcoded unit codes.
-
-Parser class
-------------
-NETZSCH5DSCDatasetParser
-    Implements the semantic_transformers Parser protocol for one NETZSCH5
-    DSC heat-flow file.
-    Produces a ParseResult matching the dataset/dsc/PMDCo simplified schema.
-    Scalar results (onset/peak temperature, enthalpy, etc.) are NOT extracted
-    automatically — they come from analysis software (NETZSCH Proteus).
-    Add them to the simplified_json before calling Transformer.run(), or pass
-    them as overrides.
+Scalar results (onset/peak temperature, enthalpy, etc.) are NOT extracted
+automatically — they come from analysis software (NETZSCH Proteus).
+Add them to the simplified_json before calling Transformer.run(), or pass
+them as overrides.
 """
 
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone, timedelta
 from io import StringIO
 from pathlib import Path
 
@@ -85,11 +85,22 @@ _KNOWN_MANUFACTURERS = [
 
 
 # ---------------------------------------------------------------------------
-# Low-level parsing helpers (ported from dsc_post_processing.py)
+# Low-level parsing helpers
 # ---------------------------------------------------------------------------
 
+def _normalize_key(k: str) -> str:
+    """Replace NETZSCH5 non-standard special-char bytes with Unicode equivalents."""
+    return k.replace("\x91", "µ").replace("\x9b", "°")
+
+
 def _parse_header(path: Path) -> dict[str, str]:
-    """Parse #KEY: VALUE metadata lines. Stops at ## data-section marker."""
+    """
+    Parse #KEY: VALUE metadata lines. Stops at ## data-section marker.
+
+    For DATA COMPARE exports (two side-by-side value columns per key),
+    only the first value column is retained (sample file; sapphire is second).
+    Non-standard NETZSCH5 byte sequences for µ and ° are normalized in keys.
+    """
     metadata: dict[str, str] = {}
     with path.open(encoding="latin-1") as f:
         for line in f:
@@ -99,8 +110,11 @@ def _parse_header(path: Path) -> dict[str, str]:
             if line.startswith("#"):
                 m = re.match(r"^#+([^:]+):\s+(.+)$", line)
                 if m:
-                    # DATA COMPARE stores two tab-separated values per key; keep first.
-                    metadata[m.group(1).strip()] = m.group(2).split("\t")[0].strip()
+                    raw_key = m.group(1).strip()
+                    key = _normalize_key(raw_key)
+                    # DATA COMPARE: two tab-separated values per key; keep first.
+                    value = m.group(2).split("\t")[0].strip()
+                    metadata[key] = value
     return metadata
 
 
@@ -156,22 +170,64 @@ def _parse_timeseries(path: Path) -> tuple[list[str], pd.DataFrame]:
     return column_names, df
 
 
-def _parse_range(range_str: str) -> dict[str, str]:
-    """Parse '25,0°C/50,0(K/min)/550,0°C' → {start_temp, heating_rate, end_temp}."""
+def _parse_range(range_str: str) -> dict[str, float | None]:
+    """
+    Parse '25,0°C/50,0(K/min)/550,0°C' → {start_temp, heating_rate, end_temp}.
+
+    Returns floats, not strings.
+    """
     clean = (range_str
              .replace(",", ".")
              .replace("\x9bC", "")
              .replace("°C", "")
              .replace("(K/min)", ""))
     parts = clean.split("/")
-    result: dict[str, str] = {}
-    if len(parts) >= 1:
-        result["start_temp"] = parts[0].strip()
-    if len(parts) >= 2:
-        result["heating_rate"] = parts[1].strip()
-    if len(parts) >= 3:
-        result["end_temp"] = parts[2].strip()
+    result: dict[str, float | None] = {}
+    try:
+        if len(parts) >= 1:
+            result["start_temp"] = float(parts[0].strip())
+        if len(parts) >= 2:
+            result["heating_rate"] = float(parts[1].strip())
+        if len(parts) >= 3:
+            result["end_temp"] = float(parts[2].strip())
+    except (ValueError, IndexError):
+        pass
     return result
+
+
+def _parse_datetime(dt_str: str) -> str | None:
+    """
+    Parse NETZSCH5 datetime 'DD.MM.YYYY HH:MM:SS (UTC±N)' to ISO 8601.
+
+    Returns None if the format doesn't match.
+    """
+    m = re.match(r"(\d{2})\.(\d{2})\.(\d{4}) (\d{2}):(\d{2}):(\d{2}) \(UTC([+-]\d+)\)", dt_str)
+    if not m:
+        return None
+    day, month, year, hour, minute, second, tz_off = m.groups()
+    try:
+        tz = timezone(timedelta(hours=int(tz_off)))
+        dt = datetime(int(year), int(month), int(day),
+                      int(hour), int(minute), int(second), tzinfo=tz)
+        return dt.isoformat()
+    except (ValueError, OverflowError):
+        return None
+
+
+def _parse_float(s: str) -> float | None:
+    """Parse a string to float; return None on failure."""
+    try:
+        return float(s.replace(",", "."))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _parse_int(s: str) -> int | None:
+    """Parse a string to int; return None on failure."""
+    try:
+        return int(s)
+    except (ValueError, AttributeError):
+        return None
 
 
 def _split_manufacturer(instrument_str: str) -> tuple[str, str]:
@@ -202,7 +258,9 @@ class NETZSCH5DSCDatasetParser:
     Parser for a single NETZSCH5 DSC heat-flow file (FORMAT=NETZSCH5, MTYPE=DSC).
 
     Produces a ParseResult matching the dataset/dsc/PMDCo simplified schema:
-      - simplified_json: dataset_name, format, and file metadata
+      - simplified_json: full instrument provenance and measurement conditions
+        extracted from the file header (operator, lab, datetime, sample mass,
+        crucible, atmosphere, calibration files, heating program, etc.)
       - timeseries: DataFrame with Temperature and heat-flow columns
       - column_iris / column_units: DSC ontology + QUDT IRI mappings
 
@@ -250,9 +308,9 @@ class NETZSCH5DSCDatasetParser:
         Parse a NETZSCH5 DSC file.
 
         Returns a ParseResult with:
-          - simplified_json: dataset_name, format, sample_name, instrument,
-            heating_rate, temperature_range, purge_gas — ready for Transformer.run()
-          - timeseries: DataFrame (Temperature, DSC sample + reference columns)
+          - simplified_json: full provenance + measurement conditions + file metadata,
+            ready for Transformer.run() after adding results[]
+          - timeseries: DataFrame (Temperature + DSC sample heat-flow columns)
           - column_iris / column_units: semantic column mappings
 
         Add results[] to simplified_json before Transformer.run() to include
@@ -269,22 +327,92 @@ class NETZSCH5DSCDatasetParser:
             "format":       "NETZSCH DSC TXT",
         }
 
-        # Metadata fields stored as top-level keys for Transformer overrides
+        # ── Provenance ────────────────────────────────────────────────────────
+        dt_raw = meta.get("DATE/TIME", "")
+        dt_iso = _parse_datetime(dt_raw)
+        if dt_iso:
+            simplified["measurement_datetime"] = dt_iso
+        elif dt_raw:
+            simplified["measurement_datetime"] = dt_raw
+
+        if meta.get("OPERATOR"):
+            simplified["operator"]   = meta["OPERATOR"]
+        if meta.get("LABORATORY"):
+            simplified["laboratory"] = meta["LABORATORY"]
+        if meta.get("PROJECT"):
+            simplified["project_id"] = meta["PROJECT"]
+        if meta.get("FILE"):
+            simplified["source_file"] = meta["FILE"]
+        if meta.get("IDENTITY"):
+            simplified["identity"]   = meta["IDENTITY"]
+        remark = meta.get("REMARK", "").strip()
+        if remark:
+            simplified["remark"]     = remark
+
+        # ── Sample / specimen ────────────────────────────────────────────────
         if meta.get("SAMPLE"):
             simplified["sample_name"]   = meta["SAMPLE"]
+        mass = _parse_float(meta.get("SAMPLE MASS /mg", ""))
+        if mass is not None:
+            simplified["sample_mass_mg"] = mass
+        if meta.get("MATERIAL"):
+            simplified["material"]      = meta["MATERIAL"]
+        ref_sample = meta.get("REFERENCE", "").strip()
+        if ref_sample:
+            simplified["reference_sample"] = ref_sample
+        ref_mass = _parse_float(meta.get("REFERENCE MASS /mg", ""))
+        if ref_mass is not None:
+            simplified["reference_mass_mg"] = ref_mass
+        sc_mass = _parse_float(meta.get("SAMPLE CRUCIBLE MASS /mg", ""))
+        if sc_mass is not None:
+            simplified["sample_crucible_mass_mg"] = sc_mass
+        rc_mass = _parse_float(meta.get("REFERENCE CRUCIBLE MASS /mg", ""))
+        if rc_mass is not None:
+            simplified["reference_crucible_mass_mg"] = rc_mass
+
+        # ── Measurement conditions ────────────────────────────────────────────
+        if meta.get("TYPE OF CRUCIBLE"):
+            simplified["crucible_type"]  = meta["TYPE OF CRUCIBLE"]
+        if meta.get("PURGE GAS 1"):
+            simplified["purge_gas"]      = meta["PURGE GAS 1"]
+        flow = _parse_float(meta.get("FLOW RATE 1 /(ml/min)", ""))
+        if flow is not None:
+            simplified["purge_gas_flow_rate_ml_min"] = flow
+        if r.get("heating_rate") is not None:
+            simplified["heating_rate_k_min"]     = r["heating_rate"]
+        if r.get("start_temp") is not None:
+            simplified["temperature_start_degC"] = r["start_temp"]
+        if r.get("end_temp") is not None:
+            simplified["temperature_end_degC"]   = r["end_temp"]
+        if meta.get("SEGMENT"):
+            simplified["segment"]        = meta["SEGMENT"]
+        mrange = _parse_float(meta.get("M.RANGE /µV", ""))
+        if mrange is not None:
+            simplified["measurement_range_uV"] = mrange
+        exo = _parse_int(meta.get("EXO", ""))
+        if exo is not None:
+            simplified["exo_sign"] = exo
+
+        # ── Instrument & calibration ──────────────────────────────────────────
         if manufacturer:
-            simplified["manufacturer"]  = manufacturer
+            simplified["manufacturer"]    = manufacturer
         if model:
             simplified["instrument_model"] = model
-        if r.get("heating_rate"):
-            simplified["heating_rate"]  = r["heating_rate"]
-        if r.get("start_temp") and r.get("end_temp"):
-            simplified["temperature_range"] = f"{r['start_temp']}–{r['end_temp']} °C"
-        if meta.get("PURGE GAS 1"):
-            simplified["purge_gas"]     = meta["PURGE GAS 1"]
+        if meta.get("CORR. FILE"):
+            simplified["baseline_correction_file"]     = meta["CORR. FILE"]
+        if meta.get("TEMPCAL"):
+            simplified["temperature_calibration_file"] = meta["TEMPCAL"]
+        if meta.get("SENSITIVITY"):
+            simplified["sensitivity_calibration_file"] = meta["SENSITIVITY"]
+        if meta.get("CORR. CODE"):
+            simplified["correction_code"] = meta["CORR. CODE"]
+        tau = meta.get("TAU-R", "").strip()
+        if tau and tau != "---":
+            simplified["tau_r"] = tau
 
-        # Drop reference column from the timeseries delivered to data2rdf;
-        # keep it in column_iris/column_units for completeness.
+        # ── Timeseries ────────────────────────────────────────────────────────
+        # Drop reference column from the timeseries delivered to the schema;
+        # keep it in column_iris/column_units for IRI completeness.
         if not df.empty and _DSC_REF_COL in df.columns:
             ts = df.drop(columns=[_DSC_REF_COL])
         else:
