@@ -66,16 +66,24 @@ _TEMP_COL        = "Temp./°C"
 _DSC_SAMPLE_COL  = "DSC/(µV/mg)_sample"
 _DSC_REF_COL     = "DSC/(µV/mg)_reference"
 
+# Human-readable column names used in the timeseries DataFrame and csvw:Column specs.
+# Format: "<Term label> (<unit symbol>)"
+_PRETTY_NAMES: dict[str, str] = {
+    _TEMP_COL:        "Temperature (°C)",
+    _DSC_SAMPLE_COL:  "DSC Heat Flow - Sample (µV/mg)",
+    _DSC_REF_COL:     "DSC Heat Flow - Reference (µV/mg)",
+}
+
 COLUMN_IRIS: dict[str, str] = {
-    _TEMP_COL:        _DSC_NS + "Temperature",
-    _DSC_SAMPLE_COL:  _DSC_NS + "DSCHeatFlow",
-    _DSC_REF_COL:     _DSC_NS + "DSCHeatFlow",
+    "Temperature (°C)":                    _DSC_NS + "Temperature",
+    "DSC Heat Flow - Sample (µV/mg)":      _DSC_NS + "DSCHeatFlow",
+    "DSC Heat Flow - Reference (µV/mg)":   _DSC_NS + "DSCHeatFlow",
 }
 
 COLUMN_UNITS: dict[str, str] = {
-    _TEMP_COL:        _QUDT_NS + "DEG_C",
-    _DSC_SAMPLE_COL:  _QUDT_NS + "MicroV-PER-MilliGM",
-    _DSC_REF_COL:     _QUDT_NS + "MicroV-PER-MilliGM",
+    "Temperature (°C)":                    _QUDT_NS + "DEG_C",
+    "DSC Heat Flow - Sample (µV/mg)":      _QUDT_NS + "MicroV-PER-MilliGM",
+    "DSC Heat Flow - Reference (µV/mg)":   _QUDT_NS + "MicroV-PER-MilliGM",
 }
 
 _KNOWN_MANUFACTURERS = [
@@ -411,12 +419,12 @@ class NETZSCH5DSCDatasetParser:
             simplified["tau_r"] = tau
 
         # ── Timeseries ────────────────────────────────────────────────────────
-        # Drop reference column from the timeseries delivered to the schema;
-        # keep it in column_iris/column_units for IRI completeness.
-        if not df.empty and _DSC_REF_COL in df.columns:
-            ts = df.drop(columns=[_DSC_REF_COL])
+        # Rename internal column names to human-readable pretty names and keep
+        # all three columns (Temperature, sample heat flow, reference heat flow).
+        if not df.empty:
+            ts = df.rename(columns=_PRETTY_NAMES)
         else:
-            ts = df if not df.empty else None
+            ts = None
 
         return ParseResult(
             simplified_json=simplified,
